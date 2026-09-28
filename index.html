@@ -58,6 +58,17 @@ textarea{width:100%;min-height:180px;font-size:.85rem;padding:10px;border:1px so
 .small{font-size:.78rem;color:var(--sub)}
 .note{border-left:3px solid var(--warn);padding-left:10px;font-size:.88rem;color:var(--sub)}
 .hide{display:none}
+h3{font-size:1.05rem;margin:1.4em 0 .4em}
+.part{margin:34px 0 6px;padding:16px 18px;border-radius:14px;background:var(--accent);color:var(--sel-ink)}
+.partT{font-size:1.6rem;font-weight:800;letter-spacing:.1em}
+.partT span{font-size:.85rem;font-weight:600;letter-spacing:0;margin-left:10px;opacity:.85}
+.partD{font-size:.88rem;margin-top:4px;opacity:.95}
+.tbl{border-top:1px solid var(--line)}
+.tr{display:grid;grid-template-columns:6.2em 1fr;gap:10px;padding:8px 4px;border-bottom:1px solid var(--line);font-size:.92rem}
+.tr.cur{background:var(--accent-soft);border-radius:6px}
+.td1{font-weight:700;white-space:nowrap}
+.tag{display:inline-block;font-size:.72rem;background:var(--accent-soft);color:var(--accent);padding:1px 8px;border-radius:99px;margin-left:6px}
+ul.lock{margin:.3em 0;padding-left:1.3em;font-size:.92rem}
 @media (max-width:420px){.opt{font-size:.72rem;padding:8px 0}}
 </style>
 </head>
@@ -148,6 +159,84 @@ const DAYSTEM=[
 ["癸","雨露","静かにしみ込む雨。知性と感受性で、裏方から周りを潤す。"]];
 const EL_MEAN={木:"伸びる・始める",火:"表現・情熱",土:"安定・育てる",金:"決断・整える",水:"知恵・柔軟さ"};
 
+// ===== 運気の流れ（大運・年運・月運） =====
+const ELS="木火土金水", HOUR=3600000;
+function solarT(t){ // UTCミリ秒 → 立春で区切った年・月（0=寅月）
+  const lam=sunLongitude(new Date(t)), j=new Date(t+9*HOUR);
+  let yy=j.getUTCFullYear(); if(j.getUTCMonth()<=1&&lam>=270&&lam<315) yy--;
+  return {lam,yy,mIdx:Math.floor(((lam-315+360)%360)/30),j};
+}
+function mIdxAt(t){return solarT(t).mIdx}
+function nextSetsu(t,dir){ // dir=+1 次の節入り／-1 いまの月の節入り（UTCミリ秒）
+  const m0=mIdxAt(t); let a=t,b=t;
+  while(mIdxAt(b)===m0){a=b;b+=dir*24*HOUR}
+  for(let i=0;i<20;i++){const c=(a+b)/2; if(mIdxAt(c)===m0)a=c; else b=c}
+  return dir>0?b:a;
+}
+function birthT(){const p=S.profile,[y,m,d]=p.bd.split("-").map(Number),[hh,mm]=p.bt?p.bt.split(":").map(Number):[12,0];return Date.UTC(y,m-1,d,hh-9,mm)}
+const GEN_GROUP=[["比肩","劫財"],["食神","傷官"],["偏財","正財"],["偏官","正官"],["偏印","印綬"]];
+const GEN_THEME=["自分の軸を立てる","表現して楽しむ","お金と人が動く","責任と立場を背負う","学んで蓄える"];
+const GEN_TXT=[
+ "独立・自力でやる・仲間と競う。人に合わせるより、自分で決めて動くほど伸びる。",
+ "発信・ものづくり・好きなことを形にする。楽しんでやったことが評価につながる。",
+ "稼ぐ・人脈を広げる・恋愛や出会い。動いた分だけ人とお金が回る。",
+ "昇進・役割・約束ごと。プレッシャーはあるが、引き受けた分だけ信頼が残る。",
+ "勉強・資格・休む・考え直す。種まきと充電にあてると、次が楽になる。"];
+function relOf(dayStem,stem){return (Math.floor(stem/2)-Math.floor(dayStem/2)+5)%5} // 0比劫 1食傷 2財 3官 4印
+function tsuhen(dayStem,stem){return GEN_GROUP[relOf(dayStem,stem)][(dayStem%2)===(stem%2)?0:1]}
+function idx60(p){for(let i=0;i<60;i++)if(pillar(i)===p)return i;return -1}
+function lowEls(ms){const v=Object.values(ms.elements),mn=Math.min(...v);return Object.keys(ms.elements).filter(k=>ms.elements[k]===mn)}
+function unseiOf(p,ms){ // 柱1つ分（大運・年・月）の読み
+  const s=STEMS.indexOf(p[0]), b=BRANCHES.indexOf(p[1]), r=relOf(ms.dayStem,s);
+  const els=[STEM_EL[s],BRANCH_EL[b]];
+  return {p,star:tsuhen(ms.dayStem,s),theme:GEN_THEME[r],txt:GEN_TXT[r],wind:lowEls(ms).filter(e=>els.includes(e))};
+}
+function daiun(ms,gender){ // 大運：陽年の男性・陰年の女性は順行。節入りまでの日数÷3＝運が切り替わる年齢
+  if(gender!=="m"&&gender!=="f") return null;
+  const t0=birthT(), yang=STEMS.indexOf(ms.year[0])%2===0, fwd=(gender==="m")===yang;
+  const start=Math.round(Math.abs(nextSetsu(t0,fwd?1:-1)-t0)/86400000/3);
+  const mi=idx60(ms.month), list=[];
+  for(let k=1;k<=9;k++) list.push({from:start+(k-1)*10,...unseiOf(pillar(((mi+(fwd?k:-k))%60+60)%60),ms)});
+  return {start,fwd,list};
+}
+function yearPillar(yy){return pillar(((yy-4)%60+60)%60)}
+function monthPillar(yy,mIdx){const ys=((yy-4)%10+10)%10;return STEMS[((ys%5)*2+2+mIdx)%10]+BRANCHES[(2+mIdx)%12]}
+function monthsAhead(n){ // いまの月（節入りから）を先頭に n か月
+  const out=[]; let t=nextSetsu(Date.now(),-1)+60000;
+  for(let k=0;k<n;k++){const s=solarT(t); out.push({...s,label:(s.j.getUTCMonth()+1)+"/"+s.j.getUTCDate()+"〜"}); t=nextSetsu(t,1)+60000;}
+  return out;
+}
+
+// ===== 九星気学（本命星・月命星・吉方位） =====
+const KYUSEI=[null,"一白水星","二黒土星","三碧木星","四緑木星","五黄土星","六白金星","七赤金星","八白土星","九紫火星"];
+const K_EL=[null,"水","土","木","木","土","金","金","土","火"];
+function yearStar(yy){return ((2026-yy)%9+9)%9+1} // 2026年＝一白水星
+function monthCenter(ys,mIdx){const st=[0,8,2,5,8,2,5,8,2,5][ys];return ((st-1-mIdx)%9+9)%9+1}
+function kyusei(){const s=solarT(birthT()), hon=yearStar(s.yy);return {hon,getsu:monthCenter(hon,s.mIdx)}}
+const FLY=["北西","西","北東","南","北","南西","東","南東"]; // 中央の次に星が飛ぶ順
+const DIR8=["北","北東","東","南東","南","南西","西","北西"];
+const OPP={北:"南",南:"北",東:"西",西:"東",北東:"南西",南西:"北東",北西:"南東",南東:"北西"};
+const BR_DIR=["北","北東","北東","東","南東","南東","南","南西","南西","西","北西","北西"]; // 子〜亥
+function boardOf(c){const b={};FLY.forEach((d,i)=>b[d]=(c+i)%9+1);return b}
+function kCompat(a,b){const d=(ELS.indexOf(K_EL[b])-ELS.indexOf(K_EL[a])+5)%5;return d===0||d===1||d===4} // 比和・相生
+function hoi(center,branch,ki,haName){
+  const b=boardOf(center), bad={}, add=(d,w)=>{if(d)(bad[d]=bad[d]||[]).push(w)}, where=s=>DIR8.find(d=>b[d]===s);
+  const w5=where(5); if(w5){add(w5,"五黄殺");add(OPP[w5],"暗剣殺")}
+  const wh=where(ki.hon); if(wh){add(wh,"本命殺");add(OPP[wh],"本命的殺")}
+  add(BR_DIR[(branch+6)%12],haName);
+  const best=[],good=[];
+  DIR8.forEach(d=>{if(bad[d]||!kCompat(ki.hon,b[d]))return;(kCompat(ki.getsu,b[d])?best:good).push(d)});
+  return {best,good,bad};
+}
+
+// ===== 風水（足りない五行を部屋で補う） =====
+const FS={
+ 木:{dir:"東",color:"緑・青緑",item:"観葉植物・木の家具・花",act:"朝日を浴びる・新しいことを1つ始める"},
+ 火:{dir:"南",color:"赤・オレンジ・紫",item:"照明・キャンドル・好きな写真",act:"部屋を明るくする・人前に出る"},
+ 土:{dir:"南西・北東",color:"黄・ベージュ・茶",item:"陶器・石・ラグ",act:"床の上を片づける・自炊する"},
+ 金:{dir:"西・北西",color:"白・金・銀",item:"金属の小物・時計・丸いもの",act:"いらない物を手放す・財布を整える"},
+ 水:{dir:"北",color:"黒・紺・水色",item:"ガラス・鏡・水まわり",act:"水まわりを清潔に・よく眠る"}};
+
 // ===== 質問データ =====
 // 性格（ビッグファイブ）：IPIP 50-item Big-Five Factor Markers（Goldberg, 1992 / public domain）を日本語訳
 // f: E=外向 A=調和 C=誠実 N=情緒の安定（表示は反転して「情緒（感受性）」） O=開放 / k: +1 or -1
@@ -223,7 +312,7 @@ const LIKERT = ["全く違う","やや違う","どちらでもない","ややそ
 const LIKE3 = ["やりたくない","どちらでもない","やりたい"];
 const PER_PAGE = 10;
 const OPS = false;
-const KEY = OPS?"uraomote_ops_v2":"uraomote_v2";
+const KEY = OPS?"uraomote_ops_v4":"uraomote_v4";
 let S = load() || {step:"start",mode:null,name:"",ans:{},page:0,profile:null};
 
 function load(){try{return JSON.parse(localStorage.getItem(KEY))}catch(e){return null}}
@@ -267,6 +356,7 @@ function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;","
 
 function render(){
   if(S.step==="start") return renderStart();
+  if(S.step==="free") return renderFree();
   if(S.step==="q") return renderQ();
   if(S.step==="result") return renderResult();
 }
@@ -275,7 +365,11 @@ function renderStart(){
   const p=S.profile||{};
   el(`
   <h1>うらおもて<span class="sub" style="font-size:.9rem;margin-left:8px">（仮）種明かしありの占い</span></h1>
-  <p class="sub">四柱推命と画数で「おもて」のあなたを占い、心理学の統計で「うら」の種明かしをします。最後にAIへ渡す文章が出るので、そのまま貼れば3つの視点で相談できます。</p>
+  <p class="sub">名前と生年月日だけで、まずは無料で占います（約1分）。</p>
+  <div class="card" style="font-size:.9rem">
+    <p><span class="sec">おもて</span>＝占い。四柱推命・五行バランス・画数・九星気学（本命星と月命星）をもとにまとめます。</p>
+    <p><span class="sec">うら</span>＝心理学。質問への回答から、性格の特性を統計で分析します（占いの種明かし）。</p>
+  </div>
   <div class="card">
     <p><b>ニックネーム</b></p><input type="text" id="nick" value="${esc(p.nick||"")}" placeholder="例：みか">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
@@ -287,17 +381,16 @@ function renderStart(){
       <div><p><b>生年月日</b></p><input type="date" id="bd" value="${esc(p.bd||"")}"></div>
       <div><p><b>生まれた時間</b>（任意）</p><input type="time" id="bt" value="${esc(p.bt||"")}"></div>
     </div>
+    <p style="margin-top:12px"><b>性別</b>（10年ごとの運気の計算に使います）</p>
+    <select id="gd" style="width:100%;padding:10px 12px;font-size:1rem;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)">
+      ${[["","答えない"],["f","女性"],["m","男性"]].map(([v,l])=>`<option value="${v}" ${(p.g||"")===v?"selected":""}>${l}</option>`).join("")}</select>
     <label class="small" style="display:flex;gap:8px;align-items:flex-start;margin-top:14px">
       <input type="checkbox" id="agree" ${p.agree?"checked":""} style="margin-top:4px">
       <span>入力した名前・生年月日・回答を、診断と相談サービスの提供・改善のために使うことに同意します。AIの答えを作るため、内容をAIサービス（Anthropic社など）に送ります。LINEで鑑定書を受け取る場合は、LINEのユーザーIDと表示名を受け取り、やり取りを記録します。病気・お金・法律のことは、占いではなく専門家への相談をおすすめします。</span>
     </label>
   </div>
-  <div class="modes">
-    <button class="mode" data-m="A"><b>A. かんたん版（50問・約7分）</b><br><span class="sub">占い＋性格の5つの傾向</span></button>
-    <button class="mode" data-m="B"><b>B. 総合版（128問・約18分）</b><br><span class="sub">占い＋性格＋24の強み＋向いている仕事のタイプ</span></button>
-  </div>
+  <p><button class="btn" id="go" style="width:100%">無料で占う</button></p>
   <p id="err" class="small" style="color:var(--warn);margin-top:10px"></p>
-  <p class="small" style="margin-top:12px">答えは、なりたい自分ではなく「今のふだんの自分」で選んでください。途中で閉じても、この端末なら続きから再開できます。</p>
   ${credit()}`);
   const upd=()=>{
     const sei=document.getElementById("sei").value.trim(), mei=document.getElementById("mei").value.trim();
@@ -309,16 +402,16 @@ function renderStart(){
   };
   ["sei","mei"].forEach(id=>document.getElementById(id).addEventListener("input",()=>{if(S.profile)S.profile.ov={};upd()}));
   upd();
-  app.querySelectorAll(".mode").forEach(b=>b.onclick=()=>{
+  document.getElementById("go").onclick=()=>{
     const g=id=>document.getElementById(id);
-    const prof={nick:g("nick").value.trim()||"名無し",sei:g("sei").value.trim(),mei:g("mei").value.trim(),bd:g("bd").value,bt:g("bt").value,agree:g("agree").checked,ov:(S.profile&&S.profile.ov)||{}};
+    const prof={nick:g("nick").value.trim()||"名無し",sei:g("sei").value.trim(),mei:g("mei").value.trim(),bd:g("bd").value,bt:g("bt").value,g:g("gd").value,agree:g("agree").checked,ov:(S.profile&&S.profile.ov)||{}};
     const miss=[];
     if(!prof.sei||!prof.mei)miss.push("姓と名"); if(!prof.bd)miss.push("生年月日"); if(!prof.agree)miss.push("同意のチェック");
     const ks=[...prof.sei].map((c,i)=>prof.ov["s"+i]??charStrokes(c)[0]).concat([...prof.mei].map((c,i)=>prof.ov["m"+i]??charStrokes(c)[0]));
     if(prof.sei&&prof.mei&&ks.some(v=>!v))miss.push("画数（赤枠の文字）");
     if(miss.length){g("err").textContent=miss.join("・")+"を入力してください";return}
-    S.profile=prof; S.name=prof.nick; S.mode=b.dataset.m; S.step="q"; S.page=0; S.ans={}; save(); render();
-  });
+    S.profile=prof; S.name=prof.nick; S.step="free"; save(); render();
+  };
 }
 function uranai(){
   const p=S.profile, [y,m,d]=p.bd.split("-").map(Number), [hh,mm]=p.bt?p.bt.split(":"):[null,null];
@@ -355,49 +448,158 @@ function renderQ(){
     if(nx){document.getElementById("q_"+nx.id).scrollIntoView({behavior:"smooth",block:"center"})}
     else document.getElementById("next").scrollIntoView({behavior:"smooth",block:"center"});
   });
-  document.getElementById("back").onclick=()=>{ if(S.page===0){S.step="start"}else{S.page--} save();render(); };
+  document.getElementById("back").onclick=()=>{ if(S.page===0){S.step="free"}else{S.page--} save();render(); };
   document.getElementById("next").onclick=()=>{ if(S.page===pages-1){S.step="result"}else{S.page++} save();render(); };
 }
 
-function renderResult(){
-  const r=scoreAll(), u=uranai(), ms=u.ms, ds=DAYSTEM[ms.dayStem];
+// ===== 共通パーツ =====
+function todayStr(){return new Date().toLocaleDateString("ja-JP")}
+function elBars(ms){
   const els=Object.entries(ms.elements), mx=Math.max(...els.map(e=>e[1]));
   const many=els.filter(e=>e[1]===mx).map(e=>e[0]), none=els.filter(e=>e[1]===0).map(e=>e[0]);
+  return `${els.map(([k,v])=>`<div class="row" style="grid-template-columns:3em 1fr 2em"><b>${k}</b><div class="meter"><i style="width:${v/8*100}%"></i></div><div class="grade" style="font-size:.9rem">${v}</div></div>`).join("")}
+    <p class="desc">多い：${many.map(e=>e+"（"+EL_MEAN[e]+"）").join("、")}${none.length?`<br>ない：${none.map(e=>e+"（"+EL_MEAN[e]+"）").join("、")}＝人や環境で補うと楽になる力`:""}</p>`;
+}
+function kakuRowsOf(u,keys){return keys.map(k=>{const v=u.kaku[k],rt=kakuRate(v);return `<div style="padding:8px 0;border-bottom:1px solid var(--line)"><div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><b style="white-space:nowrap">${k}</b><span style="font-size:1.15rem;font-weight:700;white-space:nowrap">${v}画</span><span style="white-space:nowrap">${KAKU_SOFT[rt]||"—"}</span><span class="small" style="white-space:nowrap">（伝統的な判定：${rt}）</span></div><div class="small">${KAKU_ROLE[k]}</div></div>`}).join("")}
+function windTxt(w){return w.length?`<span class="tag">追い風：${w.join("・")}が入る</span>`:""}
+function ageNow(){const [y,m,d]=S.profile.bd.split("-").map(Number),n=new Date();return n.getFullYear()-y-((n.getMonth()+1<m||(n.getMonth()+1===m&&n.getDate()<d))?1:0)}
+
+// ===== 無料：さくっと占い =====
+function renderFree(){
+  const u=uranai(), ms=u.ms, ds=DAYSTEM[ms.dayStem], ki=kyusei();
+  const yy=solarT(Date.now()).yy, yu=unseiOf(yearPillar(yy),ms);
+  el(`
+  <h1>${esc(S.name)}さんの おもて</h1>
+  <p class="sub">無料の占い／${todayStr()}</p>
+  <div class="card"><span class="sec">あなたの本質（四柱推命）</span>
+    <p style="font-size:1.3rem;font-weight:700;margin-top:4px">${ds[0]}＝${ds[1]}</p><p>${ds[2]}</p>
+    <p class="small">九星気学の本命星：${KYUSEI[ki.hon]}</p></div>
+  <div class="card"><span class="sec">五行バランス</span>${elBars(ms)}</div>
+  <div class="card"><span class="sec">名前の画数（いちばん大事な2つ）</span>${kakuRowsOf(u,["人格","総格"])}</div>
+  <div class="card"><span class="sec">${yy}年のテーマ</span>
+    <p style="font-size:1.15rem;font-weight:700;margin-top:4px">${yu.theme}</p>
+    <p class="small">この1年の中身と、これから12か月の流れは詳細レポートで。</p></div>
+
+  <div class="card" style="border:2px solid var(--accent)">
+    <p>占いでは、あなたは<b>「${ds[1]}」</b>。${ds[2].split("。")[0]}。</p>
+    <p style="font-size:1.1rem;font-weight:700;margin-top:8px">では、あなた自身の答えでも、そうでしょうか？</p>
+    <p class="small">質問に答えると、占いの結果を心理学で答え合わせします。当たっているところも、外れているところも、種明かしします。</p>
+  </div>
+
+  <h2>詳細レポートでわかること</h2>
+  <div class="card">
+    <p><span class="sec">おもて（占い）</span></p>
+    <ul class="lock">
+      <li>命式のすべてと、五行の読み解き</li>
+      <li>運気の流れ：10年ごと／今年から3年／これから12か月</li>
+      <li>月別の吉方位（引っ越し・旅行の方角）</li>
+      <li>あなたに合う風水（色・方角・置くもの）</li>
+      <li>画数の5つの格すべて</li>
+    </ul>
+    <p style="margin-top:10px"><span class="sec">うら（心理学・種明かし）</span></p>
+    <ul class="lock">
+      <li>性格の5つの特性</li>
+      <li>24の強みのTOP5（総合版）</li>
+      <li>向いている仕事のタイプ（総合版）</li>
+    </ul>
+    <p class="small" style="margin-top:8px">うらは質問に答えると開きます。答えは、なりたい自分ではなく「いまのふだんの自分」で選んでください。<br>※いまはテスト期間のため無料です。</p>
+  </div>
+  <div class="modes">
+    <button class="mode" data-m="A"><b>標準版（50問・約7分）</b><br><span class="sub">おもてのすべて＋うら：性格の5つの特性</span></button>
+    <button class="mode" data-m="B"><b>総合版（128問・約18分）</b><br><span class="sub">標準版＋24の強み＋向いている仕事のタイプ</span></button>
+  </div>
+  <p style="margin-top:20px"><button class="btn ghost" id="edit">入力をやり直す</button></p>
+  ${credit()}`);
+  app.querySelectorAll(".mode").forEach(b=>b.onclick=()=>{
+    if(S.mode!==b.dataset.m){S.ans={};S.page=0}
+    S.mode=b.dataset.m; S.step="q"; save(); render();
+  });
+  document.getElementById("edit").onclick=()=>{S.step="start";save();render()};
+}
+
+// ===== 詳細レポート =====
+function renderResult(){
+  const r=scoreAll(), u=uranai(), ms=u.ms, ds=DAYSTEM[ms.dayStem], ki=kyusei();
   const pillars=[["年柱",ms.year],["月柱",ms.month],["日柱",ms.day],["時柱",ms.hour||"—"]];
-  const shichu=`<h2>おもて①　四柱推命・五行</h2><div class="card">
+  // --- おもて1：四柱推命・五行
+  const shichu=`<h3>1. 四柱推命・五行バランス</h3><div class="card">
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center;margin-bottom:12px">${pillars.map(([k,v])=>`<div style="border:1px solid var(--line);border-radius:8px;padding:6px"><div class="small">${k}</div><div style="font-size:1.3rem;font-weight:700;${k==="日柱"?"color:var(--accent)":""}">${v}</div></div>`).join("")}</div>
     <p><b>あなたの本質（日干）：${ds[0]}＝${ds[1]}</b><br>${ds[2]}</p>
-    ${els.map(([k,v])=>`<div class="row" style="grid-template-columns:3em 1fr 2em"><b>${k}</b><div class="meter"><i style="width:${v/8*100}%"></i></div><div class="grade" style="font-size:.9rem">${v}</div></div>`).join("")}
-    <p class="desc">多い：${many.map(e=>e+"（"+EL_MEAN[e]+"）").join("、")}${none.length?`<br>ない：${none.map(e=>e+"（"+EL_MEAN[e]+"）").join("、")}＝人や環境で補うと楽になる力`:""}</p>
+    ${elBars(ms)}
     ${ms.hour?"":`<p class="small">生まれた時間がないので、時柱なし（6文字）で見ています。${ms.nearSetsu?"<br>節の変わり目の日なので、時間によって月柱が変わる可能性があります。":""}</p>`}
   </div>`;
-  const kakuRows=Object.entries(u.kaku).map(([k,v])=>{const rt=kakuRate(v);return `<div style="padding:8px 0;border-bottom:1px solid var(--line)"><div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><b style="white-space:nowrap">${k}</b><span style="font-size:1.15rem;font-weight:700;white-space:nowrap">${v}画</span><span style="white-space:nowrap">${KAKU_SOFT[rt]||"—"}</span><span class="small" style="white-space:nowrap">（伝統的な判定：${rt}）</span></div><div class="small">${KAKU_ROLE[k]}</div></div>`}).join("");
-  const kakuH=`<h2>おもて②　画数（姓名判断）</h2><div class="card">
+  // --- おもて2：九星気学
+  const kiH=`<h3>2. 九星気学（本命星・月命星）</h3><div class="card">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:center">
+      <div style="border:1px solid var(--line);border-radius:8px;padding:8px"><div class="small">本命星（おもての自分・社会での顔）</div><div style="font-size:1.2rem;font-weight:700">${KYUSEI[ki.hon]}</div></div>
+      <div style="border:1px solid var(--line);border-radius:8px;padding:8px"><div class="small">月命星（内面・素の自分）</div><div style="font-size:1.2rem;font-weight:700">${KYUSEI[ki.getsu]}</div></div>
+    </div>
+    <p class="small" style="margin-top:8px">吉方位は、本命星と相性のよい星が回っている方角です。月命星とも相性がよい方角を「特に良い」としています。</p></div>`;
+  // --- おもて3：運気の流れ
+  const age=ageNow(), dy=daiun(ms,S.profile.g), nowY=solarT(Date.now()).yy;
+  const dyH=dy?`<p><b>10年ごとの流れ（大運）</b><span class="small">　${dy.start}歳から10年ごとに切り替わります</span></p>
+    <div class="tbl">${dy.list.filter(x=>x.from+10>age-10&&x.from<age+40).map(x=>{const cur=age>=x.from&&age<x.from+10;
+      return `<div class="tr ${cur?"cur":""}"><div class="td1">${x.from}〜${x.from+9}歳${cur?"<br><span class='small'>いまここ</span>":""}</div><div><b>${x.theme}</b>（${x.p}）${windTxt(x.wind)}<div class="small">${x.txt}</div></div></div>`}).join("")}</div>`
+    :`<p class="small">10年ごとの流れ（大運）は性別で計算方法が変わるため、性別を入れた場合に表示します。</p>`;
+  const yrH=`<p style="margin-top:14px"><b>今年から3年</b></p><div class="tbl">${[0,1,2].map(k=>{const x=unseiOf(yearPillar(nowY+k),ms);
+      return `<div class="tr ${k===0?"cur":""}"><div class="td1">${nowY+k}年</div><div><b>${x.theme}</b>（${x.p}）${windTxt(x.wind)}<div class="small">${x.txt}</div></div></div>`}).join("")}</div>
+    <p class="small">年の切り替わりは立春（2月4日ごろ）です。</p>`;
+  const months=monthsAhead(12);
+  const moH=`<p style="margin-top:14px"><b>これから12か月</b></p><div class="tbl">${months.map((m,k)=>{const x=unseiOf(monthPillar(m.yy,m.mIdx),ms);
+      return `<div class="tr ${k===0?"cur":""}"><div class="td1">${m.label}</div><div><b>${x.theme}</b>${windTxt(x.wind)}</div></div>`}).join("")}</div>
+    <p class="small">月の切り替わりは節入り（毎月5〜8日ごろ）です。「追い風」は、あなたの命式に少ない五行が入ってくる時期です。</p>`;
+  const flowH=`<h3>3. 運気の流れ</h3><div class="card">${dyH}${yrH}${moH}</div>`;
+  // --- おもて4：吉方位
+  const hy=[0,1].map(k=>{const yy=nowY+k;return {yy,h:hoi(yearStar(yy),((yy-4)%12+12)%12,ki,"歳破")}});
+  const dirTxt=h=>`${h.best.length?`<b>${h.best.join("・")}</b>`:""}${h.best.length&&h.good.length?"・":""}${h.good.join("・")}${!h.best.length&&!h.good.length?"<span class='small'>なし（大きな移動は控えめに）</span>":""}`;
+  const badTxt=h=>Object.keys(h.bad).filter(d=>DIR8.includes(d)).sort((a,b)=>DIR8.indexOf(a)-DIR8.indexOf(b)).join("・");
+  const hoiH=`<h3>4. 月別の吉方位</h3><div class="card">
+    <p><b>引っ越し・長く住む場所は「年」で見ます</b></p>
+    ${hy.map(x=>`<div class="tr"><div class="td1">${x.yy}年</div><div>吉：${dirTxt(x.h)}<div class="small">避けたい：${badTxt(x.h)}</div></div></div>`).join("")}
+    <p style="margin-top:14px"><b>旅行・お出かけは「月」で見ます</b></p>
+    <div class="tbl">${months.map(m=>{const h=hoi(monthCenter(yearStar(m.yy),m.mIdx),(2+m.mIdx)%12,ki,"月破");
+      return `<div class="tr"><div class="td1">${m.label}</div><div>吉：${dirTxt(h)}<div class="small">避けたい：${badTxt(h)}</div></div></div>`}).join("")}</div>
+    <p class="small">太字は月命星とも相性がよい「特に良い」方角。方角は自宅から見た向きです。避けたい方角は、五黄殺・暗剣殺・本命殺・本命的殺・破の5つを除いています（流派により見方が異なります）。</p></div>`;
+  // --- おもて5：風水
+  const low=lowEls(ms), mx=Math.max(...Object.values(ms.elements)), hi=Object.keys(ms.elements).filter(k=>ms.elements[k]===mx);
+  const fsH=`<h3>5. あなたに合う風水</h3><div class="card">
+    <p>命式に少ない<b>${low.join("・")}</b>を部屋で補うと、バランスが整いやすくなります。</p>
+    ${low.slice(0,2).map(e=>{const f=FS[e];return `<div class="tr"><div class="td1">${e}（${EL_MEAN[e]}）</div><div>方角：${f.dir}／色：${f.color}<div class="small">置くもの：${f.item}<br>習慣：${f.act}</div></div></div>`}).join("")}
+    <p class="small" style="margin-top:8px">多い${hi.join("・")}の力は、それが生む${hi.map(e=>ELS[(ELS.indexOf(e)+1)%5]).join("・")}の色やものを少し足すと、ほどよく外に流れます。</p></div>`;
+  // --- おもて6：画数
+  const kakuH=`<h3>6. 画数（姓名判断）</h3><div class="card">
     <p class="small">${esc(S.profile.sei)}（${u.s.join("・")}）　${esc(S.profile.mei)}（${u.n.join("・")}）</p>
-    <div>${kakuRows}</div>
+    <div>${kakuRowsOf(u,Object.keys(u.kaku))}</div>
     <p class="note" style="margin-top:10px">画数の吉凶は流派によって違います（ここでは熊崎式・新字体の画数）。「鍛えどころ」は悪い意味ではなく、意識すると伸びる場所です。</p></div>`;
+  // --- うら
   const b5=B5ORDER.map(f=>{const m=B5META[f],x=r.b5[f];const d=x.grade==="強め"?m.hi:(x.grade==="控えめ"?m.lo:m.mid);
     return `<div class="row"><b>${m.name}</b><div class="meter"><i style="width:${x.score}%"></i></div><div class="grade">${x.grade}</div></div><p class="desc">${d}</p>`}).join("");
   let strH="",intH="";
   if(S.mode==="B"){
-    strH=`<h3 style="margin-top:18px">強み TOP5</h3><ol class="top">${r.str.slice(0,5).map(s=>`<li><b>${s.name}</b>：${s.desc}</li>`).join("")}</ol>
-      <p class="small">あまり使っていない強み：${r.str.slice(-3).map(s=>s.name).join("・")}</p>`;
+    strH=`<h3>2. 強み TOP5</h3><div class="card"><ol class="top">${r.str.slice(0,5).map(s=>`<li><b>${s.name}</b>：${s.desc}</li>`).join("")}</ol>
+      <p class="small">あまり使っていない強み：${r.str.slice(-3).map(s=>s.name).join("・")}</p></div>`;
     const t=r.int.slice(0,2).map(x=>RIASEC[x.k]);
-    intH=`<h3 style="margin-top:18px">向いている仕事のタイプ</h3>${t.map((x,i)=>`<p><b>${i+1}位：${x.name}（${x.verb}）</b><br><span class="sub">例：${x.jobs}</span></p>`).join("")}`;
+    intH=`<h3>3. 向いている仕事のタイプ</h3><div class="card">${t.map((x,i)=>`<p><b>${i+1}位：${x.name}（${x.verb}）</b><br><span class="sub">例：${x.jobs}</span></p>`).join("")}</div>`;
   }
   const prompt=makePrompt(r,u);
   el(`
   <h1>${esc(S.name)}さんの うらおもて</h1>
-  <p class="sub">${S.mode==="A"?"かんたん版":"総合版"}／${new Date().toLocaleDateString("ja-JP")}</p>
-  ${shichu}${kakuH}
-  <h2>うら　種明かし（心理学・統計）</h2>
-  <div class="card"><p class="small" style="margin-bottom:8px">占いの結果を、質問への回答という「データ」で答え合わせします。</p>${b5}
-    <p class="note">強め・ふつう・控えめは暫定の区切りです（回答の平均で判定）。高い＝良いではなく、得意なやり方の違いです。</p>
-    ${strH}${intH}</div>
+  <p class="sub">詳細レポート（${S.mode==="A"?"標準版":"総合版"}）／${todayStr()}</p>
+
+  <div class="part"><div class="partT">おもて<span>占い</span></div>
+    <p class="partD">四柱推命・五行バランス・画数・九星気学（本命星と月命星）をもとにまとめています。生まれた日と名前から見る「あなたの外側の流れ」です。</p></div>
+  ${shichu}${kiH}${flowH}${hoiH}${fsH}${kakuH}
+
+  <div class="part"><div class="partT">うら<span>心理学・種明かし</span></div>
+    <p class="partD">質問への回答から、性格心理学の統計（ビッグファイブ）をもとに性格の特性を分析しています。占いの結果を、あなた自身の回答という「データ」で答え合わせします。</p></div>
+  <h3>1. 性格の5つの特性</h3>
+  <div class="card">${b5}
+    <p class="note">強め・ふつう・控えめは暫定の区切りです（回答の平均で判定）。高い＝良いではなく、得意なやり方の違いです。</p></div>
+  ${strH}${intH}
   ${`
   <h2>鑑定書を受け取る</h2>
   <div class="card">
-    <p>この結果をもとに、案内人が3つの視点で読み解いた<b>あなた専用の鑑定書</b>をお送りします。</p>
+    <p>このレポートをもとに、案内人がおもてとうらを読み合わせた<b>あなた専用の鑑定書</b>をお送りします。</p>
     <p style="margin-top:10px"><b>いま相談したいこと</b>（任意・仕事・恋愛・引っ越しなど何でも）</p>
     <textarea id="consult" style="min-height:90px" placeholder="例：転職を考えていて、今のタイミングでいいか迷っています">${esc(S.consult||"")}</textarea>
     ${LINE_ON?`<p style="margin-top:10px"><button class="btn" id="snd">${S.sent?"送信済み（もう一度送る）":"LINEで鑑定書を受け取る"}</button></p>
@@ -406,6 +608,7 @@ function renderResult(){
     <p class="small">コピーしたら、案内人のLINEにそのまま貼って送ってください。</p>`}
   </div>
   <p style="margin-top:24px"><button class="btn ghost" id="again">最初からやり直す</button></p>`}
+  <p class="note" style="margin-top:20px">占いは、自分をふり返るための材料です。病気・お金・法律のことは専門家にご相談ください。</p>
   ${credit()}`);
   const copy=(txt,btn,label)=>{const done=()=>{btn.textContent="コピーしました";setTimeout(()=>btn.textContent=label,1800)};
     if(navigator.clipboard) navigator.clipboard.writeText(txt).then(done,()=>fallback(txt,done)); else fallback(txt,done);};
@@ -422,13 +625,13 @@ function fallback(txt,done){const t=document.createElement("textarea");t.value=t
 function makePrompt(){return ""}
 function makeData(){
   const items=buildItems(S.mode), p=S.profile;
-  const o={v:2,n:S.name,s:p.sei,m:p.mei,bd:p.bd,bt:p.bt||"",ov:p.ov||{},md:S.mode,a:items.map(it=>S.ans[it.id]).join(""),q:S.consult||"",d:new Date().toISOString().slice(0,10)};
+  const o={v:2,n:S.name,s:p.sei,m:p.mei,bd:p.bd,bt:p.bt||"",g:p.g||"",ov:p.ov||{},md:S.mode,a:items.map(it=>S.ans[it.id]).join(""),q:S.consult||"",d:new Date().toISOString().slice(0,10)};
   return "URAOMOTE2:"+btoa(unescape(encodeURIComponent(JSON.stringify(o))));
 }
 function loadData(txt){
   const m=txt.match(/URAOMOTE2:([A-Za-z0-9+/=]+)/); if(!m) throw new Error("データが見つかりません");
   const o=JSON.parse(decodeURIComponent(escape(atob(m[1]))));
-  S={step:"result",mode:o.md,name:o.n,consult:o.q,profile:{nick:o.n,sei:o.s,mei:o.m,bd:o.bd,bt:o.bt,ov:o.ov,agree:true},ans:{},page:0};
+  S={step:"result",mode:o.md,name:o.n,consult:o.q,profile:{nick:o.n,sei:o.s,mei:o.m,bd:o.bd,bt:o.bt,g:o.g||"",ov:o.ov,agree:true},ans:{},page:0};
   buildItems(o.md).forEach((it,i)=>S.ans[it.id]=+o.a[i]);
 }
 
