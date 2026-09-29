@@ -647,8 +647,9 @@ async function sendToHQ(){
     if(!liff.isLoggedIn()){ S.pendingSend=true; save(); liff.login({redirectUri:location.href}); return; }
     const fr=await liff.getFriendship().catch(()=>({friendFlag:true}));
     if(!fr.friendFlag){
-      S.pendingSend=false; save(); if(btn)btn.disabled=false;
-      say(`先に公式LINE「うらおもて」を友だち追加してください。鑑定書はそこに届きます。<br><a class="btn" style="display:inline-block;margin-top:8px" href="${OA_ADD_URL}" target="_blank">友だち追加する</a><br>追加したら、もう一度上のボタンを押してください。`);
+      S.pendingSend=false; S.waitFriend=true; save(); if(btn)btn.disabled=false;
+      say(`鑑定書は公式LINE「うらおもて」に届きます。下のボタンで友だち追加してください。<br><a class="btn" style="display:inline-block;margin-top:8px" href="${OA_ADD_URL}" target="_blank">友だち追加する</a><br>追加してこの画面に戻ると、自動で送信します。`);
+      watchFriend();
       return;
     }
     const res=await fetch(GAS_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},
@@ -656,7 +657,7 @@ async function sendToHQ(){
     const j=await res.json();
     if(j.error==="token"){ S.pendingSend=true; save(); liff.logout(); liff.login({redirectUri:location.href}); return; }
     if(!j.ok) throw new Error(j.error||"送信エラー");
-    S.pendingSend=false; S.sent=true; save();
+    S.pendingSend=false; S.waitFriend=false; S.sent=true; save();
     if(btn){btn.disabled=false;btn.textContent="送信済み（もう一度送る）";}
     say("受け付けました。公式LINE「うらおもて」に受付のお知らせが届きます。鑑定書は数日以内にお送りします。");
   }catch(e){
@@ -666,6 +667,33 @@ async function sendToHQ(){
 }
 render();
 if(LINE_ON && S.pendingSend && S.step==="result") liffReady.then(()=>{ if(liff.isLoggedIn()) sendToHQ(); });
+// 友だち追加から戻ったら自動で送信する
+let friendTimer=null, friendBusy=false;
+async function checkFriendAndSend(){
+  if(!S.waitFriend||friendBusy) return;
+  friendBusy=true;
+  try{
+    await liffReady;
+    if(!liff.isLoggedIn()) return;
+    const fr=await liff.getFriendship().catch(()=>({friendFlag:false}));
+    if(fr.friendFlag){
+      S.waitFriend=false; save();
+      if(friendTimer){clearInterval(friendTimer);friendTimer=null;}
+      await sendToHQ();
+    }
+  }finally{friendBusy=false;}
+}
+function watchFriend(){
+  if(friendTimer) return;
+  const t0=Date.now();
+  friendTimer=setInterval(()=>{
+    if(!S.waitFriend||Date.now()-t0>15*60*1000){clearInterval(friendTimer);friendTimer=null;return;}
+    checkFriendAndSend();
+  },3000);
+}
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") checkFriendAndSend(); });
+window.addEventListener("focus",checkFriendAndSend);
+if(LINE_ON && S.waitFriend && S.step==="result"){ checkFriendAndSend(); watchFriend(); }
 </script>
 </body>
 </html>
