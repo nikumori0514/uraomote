@@ -655,8 +655,7 @@ function credit(){return `<p class="small" style="margin-top:32px;opacity:.7">�
 async function lineReady(){
   await liffReady;
   if(!liff.isLoggedIn()){ S.pendingLogin=true; save(); liff.login({redirectUri:location.href}); return false; }
-  const fr=await liff.getFriendship().catch(()=>({friendFlag:true}));
-  return fr.friendFlag ? "ok" : "notFriend";
+  return true;
 }
 async function post(body){
   const res=await fetch(GAS_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},
@@ -672,10 +671,11 @@ async function post(body){
 async function sendFree(){
   S.pendingSend="free"; S.step="gate"; save(); renderGate("送っています…");
   try{
-    const st=await lineReady(); if(!st) return;
-    if(st==="notFriend"){ S.waitFriend="free"; save(); renderGate(); watchFriend(); return; }
+    if(!await lineReady()) return;
     const j=await post({type:"free",data:makeData(),sum:freeSummary()}); if(!j) return;
-    S.pendingSend=""; S.waitFriend=""; S.sentFree=true; S.step="sentFree"; save(); render();
+    S.pendingSend="";
+    if(j.waiting){ S.waitFriend="free"; save(); renderGate(); watchFriend(); return; }
+    S.waitFriend=""; S.sentFree=true; S.step="sentFree"; save(); render();
   }catch(e){
     S.pendingSend=""; save();
     renderGate("送れませんでした。時間をおいてもう一度お試しください。（"+esc(e.message||e)+"）",true);
@@ -687,7 +687,7 @@ function renderGate(msg,retry){
   <h1>${esc(S.name||"")}さんの おもて</h1>
   <div class="card" style="text-align:center">
     ${wait?`<p style="font-size:1.1rem;font-weight:700">結果は公式LINE「うらおもて」でお送りします</p>
-    <p class="small" style="margin-top:6px">下のボタンで友だち追加してください。<br>追加してこの画面に戻ると、自動で結果を送ります。</p>
+    <p class="small" style="margin-top:6px">下のボタンで友だち追加（ブロック中の方はブロック解除）してください。<br>追加すると、すぐにLINEへ結果が届きます。</p>
     <p style="margin-top:14px"><a class="btn" href="${OA_ADD_URL}" target="_blank" style="text-decoration:none">友だち追加する</a></p>`
     :`<p>${msg||"送っています…"}</p>`}
     ${retry?`<p style="margin-top:14px"><button class="btn" id="retry">もう一度送る</button></p>`:""}
@@ -716,21 +716,16 @@ async function sendToHQ(auto){
   if(btn&&!auto)btn.disabled=true; say("送信しています…");
   S.pendingSend=auto?"auto":"consult"; save();
   try{
-    const st=await lineReady(); if(!st) return;
-    if(st==="notFriend"){
-      S.waitFriend=S.pendingSend; save(); if(btn)btn.disabled=false;
-      say(`結果は公式LINE「うらおもて」に届きます。下のボタンで友だち追加してください。<br><a class="btn" style="display:inline-block;margin-top:8px" href="${OA_ADD_URL}" target="_blank">友だち追加する</a><br>追加してこの画面に戻ると、自動で送信します。`);
+    if(!await lineReady()) return;
+    const kind=S.pendingSend;
+    const j=await post({type:"submit",auto:!!auto,consult:auto?"":(S.consult||""),data:makeData()}); if(!j) return;
+    S.pendingSend=""; save(); if(btn)btn.disabled=false;
+    if(j.waiting){
+      S.waitFriend=kind; save();
+      say(`結果は公式LINE「うらおもて」に届きます。下のボタンで友だち追加（ブロック中の方はブロック解除）してください。<br><a class="btn" style="display:inline-block;margin-top:8px" href="${OA_ADD_URL}" target="_blank">友だち追加する</a><br>追加すると、すぐにLINEへ届きます。`);
       watchFriend(); return;
     }
-    const j=await post({type:"submit",auto:!!auto,consult:auto?"":(S.consult||""),data:makeData()}); if(!j) return;
-    S.pendingSend=""; S.waitFriend="";
-    if(auto) S.sent=true; else S.consulted=true;
-    save();
-    if(auto) say("このレポートは公式LINE「うらおもて」にも送りました。");
-    else{
-      if(btn){btn.disabled=false;btn.textContent="相談を送りました（もう一度送る）";}
-      say("受け付けました。鑑定書は数日以内に公式LINE「うらおもて」でお送りします。");
-    }
+    doneSend(kind);
   }catch(e){
     S.pendingSend=""; save(); if(btn)btn.disabled=false;
     say(auto?"LINEへの送信に失敗しました。下の「相談を送る」から送れます。（"+esc(e.message||e)+"）"
@@ -738,20 +733,30 @@ async function sendToHQ(auto){
   }
 }
 
-// 友だち追加から戻ったら自動で続きを送る
+function doneSend(kind){
+  S.waitFriend="";
+  if(kind==="free"){ S.sentFree=true; S.step="sentFree"; save(); render(); return; }
+  if(kind==="auto") S.sent=true; else S.consulted=true;
+  save();
+  const m=document.getElementById(kind==="auto"?"autoMsg":"sndMsg");
+  if(kind==="auto"){ if(m) m.innerHTML="このレポートは公式LINE「うらおもて」にも送りました。"; }
+  else{
+    const b=document.getElementById("snd"); if(b) b.textContent="相談を送りました（もう一度送る）";
+    if(m) m.innerHTML="受け付けました。鑑定書は数日以内に公式LINE「うらおもて」でお送りします。";
+  }
+}
+// 友だち追加されたら本部が結果を届ける。画面は本部の状態を見て「送りました」に切り替える
 let friendTimer=null, friendBusy=false;
 function resume(kind){ if(kind==="free") sendFree(); else if(kind==="auto") sendToHQ(true); else if(kind==="consult") sendToHQ(false); }
 async function checkFriendAndSend(){
-  if(!S.waitFriend||friendBusy) return;
+  if(!S.waitFriend||!S.key||friendBusy) return;
   friendBusy=true;
   try{
-    await liffReady;
-    if(!liff.isLoggedIn()) return;
-    const fr=await liff.getFriendship().catch(()=>({friendFlag:false}));
-    if(fr.friendFlag){
-      const k=S.waitFriend; S.waitFriend=""; save();
+    const r=await fetch(GAS_URL+"?s="+encodeURIComponent(S.key)).then(x=>x.json()).catch(()=>null);
+    if(r&&r.ok&&r.state.indexOf("友だち待ち")!==0){
+      const k=S.waitFriend;
       if(friendTimer){clearInterval(friendTimer);friendTimer=null;}
-      await resume(k);
+      doneSend(k);
     }
   }finally{friendBusy=false;}
 }
