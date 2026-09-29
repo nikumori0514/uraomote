@@ -69,6 +69,20 @@ h3{font-size:1.05rem;margin:1.4em 0 .4em}
 .td1{font-weight:700;white-space:nowrap}
 .tag{display:inline-block;font-size:.72rem;background:var(--accent-soft);color:var(--accent);padding:1px 8px;border-radius:99px;margin-left:6px}
 ul.lock{margin:.3em 0;padding-left:1.3em;font-size:.92rem}
+:root{--ai:#23305a;--ai-ink:#ffffff;--ai-sub:#b9c3e0;--ai-btn:#f2c14e;--ai-btn-ink:#23305a}
+.tease{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line);font-size:.9rem;color:var(--ai);font-weight:700}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .tease{color:var(--ai-sub)}}
+:root[data-theme="dark"] .tease{color:var(--ai-sub)}
+.ura{background:var(--ai);color:var(--ai-ink);border-radius:18px;padding:26px 20px;margin:28px 0 14px}
+.ura .k{font-size:.8rem;letter-spacing:.3em;color:var(--ai-sub)}
+.ura h2{color:var(--ai-ink);font-size:1.35rem;line-height:1.5;margin:.4em 0 .6em}
+.ura ul{margin:0 0 18px;padding-left:1.2em;font-size:.95rem;line-height:1.8}
+.ura .go{display:block;width:100%;border:0;border-radius:12px;padding:16px;font-size:1.1rem;font-weight:800;background:var(--ai-btn);color:var(--ai-btn-ink);cursor:pointer}
+.ura .alt{display:block;width:100%;text-align:center;margin-top:10px;background:transparent;border:1px solid var(--ai-sub);color:var(--ai-ink);border-radius:12px;padding:11px;font-size:.92rem;cursor:pointer}
+.ura .unote{color:var(--ai-sub);margin-top:12px}
+.sticky{position:fixed;left:0;right:0;bottom:0;padding:10px 16px calc(10px + env(safe-area-inset-bottom));background:var(--ai);box-shadow:0 -4px 16px rgba(0,0,0,.18);transition:transform .25s;z-index:10}
+.sticky.off{transform:translateY(110%)}
+.sticky button{display:block;width:100%;max-width:560px;margin:0 auto;border:0;border-radius:12px;padding:13px;font-size:1.02rem;font-weight:800;background:var(--ai-btn);color:var(--ai-btn-ink);cursor:pointer}
 @media (max-width:420px){.opt{font-size:.72rem;padding:8px 0}}
 </style>
 </head>
@@ -478,48 +492,36 @@ function freeSummary(){
 function renderFree(onlyUra){
   const u=uranai(), ms=u.ms, ds=DAYSTEM[ms.dayStem], ki=kyusei();
   const yy=solarT(Date.now()).yy, yu=unseiOf(yearPillar(yy),ms);
+  const lead=ds[2].split("。")[0], low=lowEls(ms);
+  const ura=`
+  <section class="ura" id="uraBox">
+    <div class="k">う ら ／ 種明かし</div>
+    <h2>占いでは、あなたは「${ds[1]}」。<br>では、あなた自身の答えでは？</h2>
+    <ul>
+      <li>占いの当たり・外れを、心理学で答え合わせ</li>
+      <li>運気の流れ・吉方位・風水・画数まで全部</li>
+      <li>性格の5つの特性（総合版は強みと向く仕事も）</li>
+    </ul>
+    <button class="go mode" data-m="A">うらを試す（50問・約7分）</button>
+    <button class="alt mode" data-m="B">じっくり総合版（128問・約18分）</button>
+    <p class="small unote">「なりたい自分」ではなく「いまのふだんの自分」で答えてください。※テスト期間中は無料です。</p>
+  </section>`;
   el((onlyUra?`
   <h1>${esc(S.name)}さんの うら</h1>
-  <p class="sub">占いの結果を、あなた自身の答えで種明かしします。</p>`:`
+  <p class="sub">占いの結果を、あなた自身の答えで種明かしします。</p>${ura}`:`
   <h1>${esc(S.name)}さんの おもて</h1>
   <p class="sub">無料の占い／${todayStr()}</p>
   <div class="card"><span class="sec">あなたの本質（四柱推命）</span>
-    <p style="font-size:1.3rem;font-weight:700;margin-top:4px">${ds[0]}＝${ds[1]}</p><p>${ds[2]}</p>
-    <p class="small">九星気学の本命星：${KYUSEI[ki.hon]}</p></div>
-  <div class="card"><span class="sec">五行バランス</span>${elBars(ms)}</div>
-  <div class="card"><span class="sec">名前の画数（いちばん大事な2つ）</span>${kakuRowsOf(u,["人格","総格"])}</div>
+    <p style="font-size:1.3rem;font-weight:700;margin-top:4px">${ds[0]}＝${ds[1]}</p><p>${lead}。</p>
+    <p class="tease">うらでは → あなたの答えでも「${ds[1]}」と出る？</p></div>
   <div class="card"><span class="sec">${yy}年のテーマ</span>
     <p style="font-size:1.15rem;font-weight:700;margin-top:4px">${yu.theme}</p>
-    <p class="small">この1年の中身と、これから12か月の流れは詳細レポートで。</p></div>
-
-  <div class="card" style="border:2px solid var(--accent)">
-    <p>占いでは、あなたは<b>「${ds[1]}」</b>。${ds[2].split("。")[0]}。</p>
-    <p style="font-size:1.1rem;font-weight:700;margin-top:8px">では、あなた自身の答えでも、そうでしょうか？</p>
-    <p class="small">質問に答えると、占いの結果を心理学で答え合わせします。当たっているところも、外れているところも、種明かしします。</p>
-  </div>`)+`
-
-  <h2>詳細レポートでわかること</h2>
-  <div class="card">
-    <p><span class="sec">おもて（占い）</span></p>
-    <ul class="lock">
-      <li>命式のすべてと、五行の読み解き</li>
-      <li>運気の流れ：10年ごと／今年から3年／これから12か月</li>
-      <li>月別の吉方位（引っ越し・旅行の方角）</li>
-      <li>あなたに合う風水（色・方角・置くもの）</li>
-      <li>画数の5つの格すべて</li>
-    </ul>
-    <p style="margin-top:10px"><span class="sec">うら（心理学・種明かし）</span></p>
-    <ul class="lock">
-      <li>性格の5つの特性</li>
-      <li>24の強みのTOP5（総合版）</li>
-      <li>向いている仕事のタイプ（総合版）</li>
-    </ul>
-    <p class="small" style="margin-top:8px">うらは質問に答えると開きます。答えは、なりたい自分ではなく「いまのふだんの自分」で選んでください。<br>※いまはテスト期間のため無料です。</p>
-  </div>
-  <div class="modes">
-    <button class="mode" data-m="A"><b>標準版（50問・約7分）</b><br><span class="sub">おもてのすべて＋うら：性格の5つの特性</span></button>
-    <button class="mode" data-m="B"><b>総合版（128問・約18分）</b><br><span class="sub">標準版＋24の強み＋向いている仕事のタイプ</span></button>
-  </div>
+    <p class="tease">うらでは → このテーマに、あなたの性格はどう効く？</p></div>
+  <div class="card"><span class="sec">五行バランス</span>${elBars(ms)}
+    <p class="tease">うらでは → 少ない「${low.join("・")}」を、性格で補えている？</p></div>
+  ${ura}
+  <div class="sticky" id="sticky"><button class="mode" data-m="A">うらを試す（約7分）</button></div>
+  <div style="height:80px"></div>`)+`
   <p style="margin-top:20px"><button class="btn ghost" id="edit">入力をやり直す</button></p>
   ${credit()}`);
   app.querySelectorAll(".mode").forEach(b=>b.onclick=()=>{
@@ -527,6 +529,11 @@ function renderFree(onlyUra){
     S.mode=b.dataset.m; S.step="q"; save(); render();
   });
   document.getElementById("edit").onclick=()=>{S.step="start";S.sentFree=false;S.key="";save();render()};
+  // うらの枠が見えている間は、下のボタンを隠す
+  const st=document.getElementById("sticky"), box=document.getElementById("uraBox");
+  if(st&&box&&window.IntersectionObserver){
+    new IntersectionObserver(es=>es.forEach(e=>st.classList.toggle("off",e.isIntersecting)),{threshold:.2}).observe(box);
+  }
 }
 
 // ===== 詳細レポート =====
