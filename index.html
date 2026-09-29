@@ -356,7 +356,10 @@ function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;","
 
 function render(){
   if(S.step==="start") return renderStart();
-  if(S.step==="free") return renderFree();
+  if(S.step==="free") return renderFree(false);
+  if(S.step==="choose") return renderFree(true);
+  if(S.step==="gate") return renderGate();
+  if(S.step==="sentFree") return renderSentFree();
   if(S.step==="q") return renderQ();
   if(S.step==="result") return renderResult();
 }
@@ -410,7 +413,8 @@ function renderStart(){
     const ks=[...prof.sei].map((c,i)=>prof.ov["s"+i]??charStrokes(c)[0]).concat([...prof.mei].map((c,i)=>prof.ov["m"+i]??charStrokes(c)[0]));
     if(prof.sei&&prof.mei&&ks.some(v=>!v))miss.push("画数（赤枠の文字）");
     if(miss.length){g("err").textContent=miss.join("・")+"を入力してください";return}
-    S.profile=prof; S.name=prof.nick; S.step="free"; save(); render();
+    S.profile=prof; S.name=prof.nick; save();
+    if(LINE_ON) sendFree(); else { S.step="free"; save(); render(); }
   };
 }
 function uranai(){
@@ -448,8 +452,9 @@ function renderQ(){
     if(nx){document.getElementById("q_"+nx.id).scrollIntoView({behavior:"smooth",block:"center"})}
     else document.getElementById("next").scrollIntoView({behavior:"smooth",block:"center"});
   });
-  document.getElementById("back").onclick=()=>{ if(S.page===0){S.step="free"}else{S.page--} save();render(); };
-  document.getElementById("next").onclick=()=>{ if(S.page===pages-1){S.step="result"}else{S.page++} save();render(); };
+  document.getElementById("back").onclick=()=>{ if(S.page===0){S.step="choose"}else{S.page--} save();render(); };
+  document.getElementById("next").onclick=()=>{ if(S.page===pages-1){S.step="result";S.sent=false}else{S.page++} save();render();
+    if(S.step==="result"&&LINE_ON) sendToHQ(true); };
 }
 
 // ===== 共通パーツ =====
@@ -465,10 +470,17 @@ function windTxt(w){return w.length?`<span class="tag">追い風：${w.join("・
 function ageNow(){const [y,m,d]=S.profile.bd.split("-").map(Number),n=new Date();return n.getFullYear()-y-((n.getMonth()+1<m||(n.getMonth()+1===m&&n.getDate()<d))?1:0)}
 
 // ===== 無料：さくっと占い =====
-function renderFree(){
+function freeSummary(){
   const u=uranai(), ms=u.ms, ds=DAYSTEM[ms.dayStem], ki=kyusei();
   const yy=solarT(Date.now()).yy, yu=unseiOf(yearPillar(yy),ms);
-  el(`
+  return {nick:S.name,stem:ds[0],name:ds[1],lead:ds[2].split("。")[0]+"。",star:KYUSEI[ki.hon],yy,theme:yu.theme};
+}
+function renderFree(onlyUra){
+  const u=uranai(), ms=u.ms, ds=DAYSTEM[ms.dayStem], ki=kyusei();
+  const yy=solarT(Date.now()).yy, yu=unseiOf(yearPillar(yy),ms);
+  el((onlyUra?`
+  <h1>${esc(S.name)}さんの うら</h1>
+  <p class="sub">占いの結果を、あなた自身の答えで種明かしします。</p>`:`
   <h1>${esc(S.name)}さんの おもて</h1>
   <p class="sub">無料の占い／${todayStr()}</p>
   <div class="card"><span class="sec">あなたの本質（四柱推命）</span>
@@ -484,7 +496,7 @@ function renderFree(){
     <p>占いでは、あなたは<b>「${ds[1]}」</b>。${ds[2].split("。")[0]}。</p>
     <p style="font-size:1.1rem;font-weight:700;margin-top:8px">では、あなた自身の答えでも、そうでしょうか？</p>
     <p class="small">質問に答えると、占いの結果を心理学で答え合わせします。当たっているところも、外れているところも、種明かしします。</p>
-  </div>
+  </div>`)+`
 
   <h2>詳細レポートでわかること</h2>
   <div class="card">
@@ -514,7 +526,7 @@ function renderFree(){
     if(S.mode!==b.dataset.m){S.ans={};S.page=0}
     S.mode=b.dataset.m; S.step="q"; save(); render();
   });
-  document.getElementById("edit").onclick=()=>{S.step="start";save();render()};
+  document.getElementById("edit").onclick=()=>{S.step="start";S.sentFree=false;S.key="";save();render()};
 }
 
 // ===== 詳細レポート =====
@@ -597,17 +609,18 @@ function renderResult(){
     <p class="note">強め・ふつう・控えめは暫定の区切りです（回答の平均で判定）。高い＝良いではなく、得意なやり方の違いです。</p></div>
   ${strH}${intH}
   ${`
-  <h2>鑑定書を受け取る</h2>
+  <h2>相談して、鑑定書を受け取る</h2>
   <div class="card">
-    <p>このレポートをもとに、案内人がおもてとうらを読み合わせた<b>あなた専用の鑑定書</b>をお送りします。</p>
+    ${LINE_ON?`<p class="small" id="autoMsg">${S.sent?"このレポートは公式LINE「うらおもて」にも送りました。":""}</p>`:""}
+    <p>相談したいことがあれば、案内人がおもてとうらを読み合わせた<b>あなた専用の鑑定書</b>をお送りします。</p>
     <p style="margin-top:10px"><b>いま相談したいこと</b>（任意・仕事・恋愛・引っ越しなど何でも）</p>
     <textarea id="consult" style="min-height:90px" placeholder="例：転職を考えていて、今のタイミングでいいか迷っています">${esc(S.consult||"")}</textarea>
-    ${LINE_ON?`<p style="margin-top:10px"><button class="btn" id="snd">${S.sent?"送信済み（もう一度送る）":"LINEで鑑定書を受け取る"}</button></p>
-    <p class="small" id="sndMsg">${S.sent?"受け付けました。鑑定書は公式LINE「うらおもて」に届きます。":"押すとLINEにログインし、結果が案内人に届きます。鑑定書は公式LINEでお送りします。"}</p>`
+    ${LINE_ON?`<p style="margin-top:10px"><button class="btn" id="snd">${S.consulted?"相談を送りました（もう一度送る）":"相談を送る"}</button></p>
+    <p class="small" id="sndMsg">${S.consulted?"受け付けました。鑑定書は公式LINE「うらおもて」に届きます。":"鑑定書は公式LINE「うらおもて」でお送りします。"}</p>`
     :`<p style="margin-top:10px"><button class="btn" id="cpd">送信用データをコピー</button></p>
     <p class="small">コピーしたら、案内人のLINEにそのまま貼って送ってください。</p>`}
   </div>
-  <p style="margin-top:24px"><button class="btn ghost" id="again">最初からやり直す</button></p>`}
+  <p style="margin-top:24px"><button class="btn ghost" id="again">質問に答え直す</button></p>`}
   <p class="note" style="margin-top:20px">占いは、自分をふり返るための材料です。病気・お金・法律のことは専門家にご相談ください。</p>
   ${credit()}`);
   const copy=(txt,btn,label)=>{const done=()=>{btn.textContent="コピーしました";setTimeout(()=>btn.textContent=label,1800)};
@@ -615,60 +628,119 @@ function renderResult(){
   if(false){}
   else{
     const c=document.getElementById("consult"); c.oninput=()=>{S.consult=c.value;save()};
-    if(LINE_ON){ document.getElementById("snd").onclick=()=>{S.consult=c.value;save();sendToHQ()}; }
+    if(LINE_ON){ document.getElementById("snd").onclick=()=>{S.consult=c.value;save();sendToHQ(false)}; }
     else document.getElementById("cpd").onclick=e=>{S.consult=c.value;save();copy(makeData(),e.target,"送信用データをコピー")};
   }
-  document.getElementById("again").onclick=OPS?()=>{S={step:"start"};render()}:reset;
+  document.getElementById("again").onclick=OPS?()=>{S={step:"start"};render()}:()=>{S.ans={};S.page=0;S.sent=false;S.consulted=false;S.step="choose";save();render()};
 }
 function fallback(txt,done){const t=document.createElement("textarea");t.value=txt;document.body.appendChild(t);t.select();try{document.execCommand("copy")}catch(e){}t.remove();done()}
 
 function makePrompt(){return ""}
 function makeData(){
-  const items=buildItems(S.mode), p=S.profile;
-  const o={v:2,n:S.name,s:p.sei,m:p.mei,bd:p.bd,bt:p.bt||"",g:p.g||"",ov:p.ov||{},md:S.mode,a:items.map(it=>S.ans[it.id]).join(""),q:S.consult||"",d:new Date().toISOString().slice(0,10)};
+  const items=S.mode?buildItems(S.mode):[], p=S.profile;
+  const o={v:2,n:S.name,s:p.sei,m:p.mei,bd:p.bd,bt:p.bt||"",g:p.g||"",ov:p.ov||{},md:S.mode||"",a:items.map(it=>S.ans[it.id]).join(""),q:S.consult||"",d:new Date().toISOString().slice(0,10)};
   return "URAOMOTE2:"+btoa(unescape(encodeURIComponent(JSON.stringify(o))));
 }
 function loadData(txt){
   const m=txt.match(/URAOMOTE2:([A-Za-z0-9+/=]+)/); if(!m) throw new Error("データが見つかりません");
   const o=JSON.parse(decodeURIComponent(escape(atob(m[1]))));
-  S={step:"result",mode:o.md,name:o.n,consult:o.q,profile:{nick:o.n,sei:o.s,mei:o.m,bd:o.bd,bt:o.bt,g:o.g||"",ov:o.ov,agree:true},ans:{},page:0};
-  buildItems(o.md).forEach((it,i)=>S.ans[it.id]=+o.a[i]);
+  S={step:o.md&&o.a?"result":"free",mode:o.md||null,name:o.n,consult:o.q,profile:{nick:o.n,sei:o.s,mei:o.m,bd:o.bd,bt:o.bt,g:o.g||"",ov:o.ov,agree:true},ans:{},page:0};
+  if(o.md&&o.a) buildItems(o.md).forEach((it,i)=>S.ans[it.id]=+o.a[i]);
 }
 
 function credit(){return `<p class="small" style="margin-top:32px;opacity:.7">仕事タイプの質問は O*NET Interest Profiler（USDOL/ETA・CC BY 4.0）を日本語訳・短縮して使用。漢字の画数は KANJIDIC2（EDRDG・CC BY-SA 4.0）。</p>`}
 
 // ===== 本部への送信（LINE版） =====
-async function sendToHQ(){
-  const btn=document.getElementById("snd"), msg=document.getElementById("sndMsg");
-  const say=t=>{if(msg)msg.innerHTML=t};
-  if(btn)btn.disabled=true; say("送信しています…");
+// 流れ：無料で占う→（友だち追加）→おもての結果をLINEへ→LINEの「うらも試す」→質問→レポートをLINEへ
+async function lineReady(){
+  await liffReady;
+  if(!liff.isLoggedIn()){ S.pendingLogin=true; save(); liff.login({redirectUri:location.href}); return false; }
+  const fr=await liff.getFriendship().catch(()=>({friendFlag:true}));
+  return fr.friendFlag ? "ok" : "notFriend";
+}
+async function post(body){
+  const res=await fetch(GAS_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},
+    body:JSON.stringify(Object.assign({idToken:liff.getIDToken(),nick:S.name,key:S.key||""},body))});
+  const j=await res.json();
+  if(j.error==="token"){ S.pendingLogin=true; save(); liff.logout(); liff.login({redirectUri:location.href}); return null; }
+  if(!j.ok) throw new Error(j.error||"送信エラー");
+  if(j.key){ S.key=j.key; save(); }
+  return j;
+}
+
+// 無料の結果をLINEへ
+async function sendFree(){
+  S.pendingSend="free"; S.step="gate"; save(); renderGate("送っています…");
   try{
-    await liffReady;
-    if(!liff.isLoggedIn()){ S.pendingSend=true; save(); liff.login({redirectUri:location.href}); return; }
-    const fr=await liff.getFriendship().catch(()=>({friendFlag:true}));
-    if(!fr.friendFlag){
-      S.pendingSend=false; S.waitFriend=true; save(); if(btn)btn.disabled=false;
-      say(`鑑定書は公式LINE「うらおもて」に届きます。下のボタンで友だち追加してください。<br><a class="btn" style="display:inline-block;margin-top:8px" href="${OA_ADD_URL}" target="_blank">友だち追加する</a><br>追加してこの画面に戻ると、自動で送信します。`);
-      watchFriend();
-      return;
-    }
-    const res=await fetch(GAS_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},
-      body:JSON.stringify({type:"submit",idToken:liff.getIDToken(),nick:S.name,consult:S.consult||"",data:makeData()})});
-    const j=await res.json();
-    if(j.error==="token"){ S.pendingSend=true; save(); liff.logout(); liff.login({redirectUri:location.href}); return; }
-    if(!j.ok) throw new Error(j.error||"送信エラー");
-    S.pendingSend=false; S.waitFriend=false; S.sent=true; save();
-    if(btn){btn.disabled=false;btn.textContent="送信済み（もう一度送る）";}
-    say("受け付けました。公式LINE「うらおもて」に受付のお知らせが届きます。鑑定書は数日以内にお送りします。");
+    const st=await lineReady(); if(!st) return;
+    if(st==="notFriend"){ S.waitFriend="free"; save(); renderGate(); watchFriend(); return; }
+    const j=await post({type:"free",data:makeData(),sum:freeSummary()}); if(!j) return;
+    S.pendingSend=""; S.waitFriend=""; S.sentFree=true; S.step="sentFree"; save(); render();
   }catch(e){
-    S.pendingSend=false; save(); if(btn)btn.disabled=false;
-    say("送れませんでした。時間をおいてもう一度押してください。（"+esc(e.message||e)+"）");
+    S.pendingSend=""; save();
+    renderGate("送れませんでした。時間をおいてもう一度お試しください。（"+esc(e.message||e)+"）",true);
   }
 }
-render();
-if(LINE_ON && S.pendingSend && S.step==="result") liffReady.then(()=>{ if(liff.isLoggedIn()) sendToHQ(); });
-// 友だち追加から戻ったら自動で送信する
+function renderGate(msg,retry){
+  const wait=S.waitFriend==="free";
+  el(`
+  <h1>${esc(S.name||"")}さんの おもて</h1>
+  <div class="card" style="text-align:center">
+    ${wait?`<p style="font-size:1.1rem;font-weight:700">結果は公式LINE「うらおもて」でお送りします</p>
+    <p class="small" style="margin-top:6px">下のボタンで友だち追加してください。<br>追加してこの画面に戻ると、自動で結果を送ります。</p>
+    <p style="margin-top:14px"><a class="btn" href="${OA_ADD_URL}" target="_blank" style="text-decoration:none">友だち追加する</a></p>`
+    :`<p>${msg||"送っています…"}</p>`}
+    ${retry?`<p style="margin-top:14px"><button class="btn" id="retry">もう一度送る</button></p>`:""}
+  </div>
+  <p style="margin-top:20px"><button class="btn ghost" id="edit">入力に戻る</button></p>`);
+  const r=document.getElementById("retry"); if(r) r.onclick=sendFree;
+  document.getElementById("edit").onclick=()=>{S.step="start";S.waitFriend="";save();render()};
+}
+function renderSentFree(){
+  el(`
+  <h1>${esc(S.name)}さんの おもて</h1>
+  <div class="card" style="text-align:center">
+    <p style="font-size:1.15rem;font-weight:700">結果をLINEに送りました</p>
+    <p class="small" style="margin-top:6px">公式LINE「うらおもて」のトークを開いてください。</p>
+    <p style="margin-top:14px"><button class="btn" id="toLine">LINEで結果を見る</button></p>
+  </div>
+  <p style="margin-top:20px"><button class="btn ghost" id="view">この画面で見る</button></p>`);
+  document.getElementById("toLine").onclick=()=>{ if(liff.isInClient()) liff.closeWindow(); else location.href=OA_ADD_URL; };
+  document.getElementById("view").onclick=()=>{S.step="free";save();render()};
+}
+
+// 質問を終えたレポート（auto=true）／相談（auto=false）を送る
+async function sendToHQ(auto){
+  const btn=document.getElementById("snd");
+  const say=t=>{const m=document.getElementById(auto?"autoMsg":"sndMsg"); if(m)m.innerHTML=t};
+  if(btn&&!auto)btn.disabled=true; say("送信しています…");
+  S.pendingSend=auto?"auto":"consult"; save();
+  try{
+    const st=await lineReady(); if(!st) return;
+    if(st==="notFriend"){
+      S.waitFriend=S.pendingSend; save(); if(btn)btn.disabled=false;
+      say(`結果は公式LINE「うらおもて」に届きます。下のボタンで友だち追加してください。<br><a class="btn" style="display:inline-block;margin-top:8px" href="${OA_ADD_URL}" target="_blank">友だち追加する</a><br>追加してこの画面に戻ると、自動で送信します。`);
+      watchFriend(); return;
+    }
+    const j=await post({type:"submit",auto:!!auto,consult:auto?"":(S.consult||""),data:makeData()}); if(!j) return;
+    S.pendingSend=""; S.waitFriend="";
+    if(auto) S.sent=true; else S.consulted=true;
+    save();
+    if(auto) say("このレポートは公式LINE「うらおもて」にも送りました。");
+    else{
+      if(btn){btn.disabled=false;btn.textContent="相談を送りました（もう一度送る）";}
+      say("受け付けました。鑑定書は数日以内に公式LINE「うらおもて」でお送りします。");
+    }
+  }catch(e){
+    S.pendingSend=""; save(); if(btn)btn.disabled=false;
+    say(auto?"LINEへの送信に失敗しました。下の「相談を送る」から送れます。（"+esc(e.message||e)+"）"
+            :"送れませんでした。時間をおいてもう一度押してください。（"+esc(e.message||e)+"）");
+  }
+}
+
+// 友だち追加から戻ったら自動で続きを送る
 let friendTimer=null, friendBusy=false;
+function resume(kind){ if(kind==="free") sendFree(); else if(kind==="auto") sendToHQ(true); else if(kind==="consult") sendToHQ(false); }
 async function checkFriendAndSend(){
   if(!S.waitFriend||friendBusy) return;
   friendBusy=true;
@@ -677,9 +749,9 @@ async function checkFriendAndSend(){
     if(!liff.isLoggedIn()) return;
     const fr=await liff.getFriendship().catch(()=>({friendFlag:false}));
     if(fr.friendFlag){
-      S.waitFriend=false; save();
+      const k=S.waitFriend; S.waitFriend=""; save();
       if(friendTimer){clearInterval(friendTimer);friendTimer=null;}
-      await sendToHQ();
+      await resume(k);
     }
   }finally{friendBusy=false;}
 }
@@ -693,7 +765,35 @@ function watchFriend(){
 }
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") checkFriendAndSend(); });
 window.addEventListener("focus",checkFriendAndSend);
-if(LINE_ON && S.waitFriend && S.step==="result"){ checkFriendAndSend(); watchFriend(); }
+
+// LINEのカードから開いたとき（?k=鍵&v=free|q|result）
+async function route(){
+  render();
+  if(!LINE_ON) return;
+  await liffReady;
+  const q=new URLSearchParams(location.search), k=q.get("k"), v=q.get("v");
+  if(k&&v){
+    const hasAns=S.mode&&S.ans&&Object.keys(S.ans).length;
+    if(S.key!==k||!S.profile||(v==="result"&&!hasAns)){
+      try{
+        const r=await fetch(GAS_URL+"?d="+encodeURIComponent(k)).then(x=>x.json());
+        if(r.ok&&r.data){ loadData(r.data); S.key=k; S.sentFree=true; if(v==="result")S.sent=true; }
+      }catch(e){ console.error(e); }
+    }
+    if(S.profile){
+      if(v==="free") S.step="free";
+      else if(v==="q") S.step=(S.step==="q"&&S.mode)?"q":"choose";
+      else if(v==="result"&&S.mode) S.step="result";
+      save();
+    }
+    history.replaceState(null,"",location.pathname);
+  }
+  render();
+  if(S.pendingLogin&&liff.isLoggedIn()){ S.pendingLogin=false; save(); }
+  if(S.pendingSend&&liff.isLoggedIn()) resume(S.pendingSend);
+  else if(S.waitFriend){ checkFriendAndSend(); watchFriend(); }
+}
+route();
 </script>
 </body>
 </html>
