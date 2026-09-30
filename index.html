@@ -471,7 +471,16 @@ const app=document.getElementById("app");
 function el(h){app.innerHTML=h;window.scrollTo(0,0)}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 
-function render(){
+function render(){ // 画面の組み立てで失敗しても止まらないように（エラー内容を出して、やり直せるようにする）
+  try{ renderInner(); }catch(e){
+    console.error(e);
+    el(`<div class="card" style="margin-top:40px;text-align:center"><p><b>うまく表示できませんでした</b></p><p class="small">${esc(e&&e.message||e)}</p>
+      <p style="margin-top:12px"><button class="cta" id="rt">もう一度開く</button></p><p style="margin-top:8px"><button class="btn ghost" id="home">はじめに戻る</button></p></div>`);
+    document.getElementById("rt").onclick=()=>location.reload();
+    document.getElementById("home").onclick=()=>{S.step=S.profile?"free":"start";S.pairFrom="";save();location.reload()};
+  }
+}
+function renderInner(){
   if(S.step==="start") return renderStart();
   if(S.step==="free"||S.step==="sentFree") return renderFree(false);
   if(S.step==="choose") return renderFree(true);
@@ -1150,8 +1159,12 @@ window.addEventListener("focus",checkFriendAndSend);
 async function route(){
   // 相性の招待リンク（?pair=相手のデータ&r=関係）。LIFF経由でもinit後に同じ形で届く
   const takePair=async()=>{const pq=new URLSearchParams(location.search), pid=pq.get("p"); let pr=pq.get("pair"); if(!pr&&!pid) return false;
-    if(!pr&&pid&&GAS_URL){ el(`<div class="reveal"><div><div class="coin"><div class="f o">表</div><div class="f u">裏</div></div><p class="mincho">相性の招待を開いています…</p></div></div>`);
-      try{const j=await fetch(GAS_URL+"?p="+encodeURIComponent(pid)).then(x=>x.json()); if(j.ok) pr=j.data;}catch(e){} }
+    if(!pr&&pid&&S.lastPid===pid&&S.pairFrom){ history.replaceState(null,"",location.pathname); return false; } // 同じ招待はもう読み込んである
+    if(!pr&&pid&&GAS_URL){ el(`<div class="reveal"><div><div class="coin"><div class="f o">表</div><div class="f u">裏</div></div><p class="mincho">相性の招待を開いています…</p><p id="slow" class="small hide" style="margin-top:14px">時間がかかっています。<br><button class="btn" id="slowBtn" style="margin-top:8px">もう一度開く</button></p></div></div>`);
+      const st=setTimeout(()=>{const x=document.getElementById("slow");if(x){x.classList.remove("hide");document.getElementById("slowBtn").onclick=()=>location.reload();}},6000);
+      try{const ac=window.AbortController?new AbortController():null, t=setTimeout(()=>ac&&ac.abort(),8000);
+        const j=await fetch(GAS_URL+"?p="+encodeURIComponent(pid),ac?{signal:ac.signal}:{}).then(x=>x.json()); clearTimeout(t); if(j.ok){pr=j.data;S.lastPid=pid;}}catch(e){}
+      clearTimeout(st); }
     if(pr) try{ readPair(pr); S.pairFrom=pr; S.pairRel=pq.get("r")||"love"; S.pairInv=pq.get("i")||pid||""; if(S.profile){S.step="pair";S.fresh=true;} else S.step="start"; save(); }catch(e){}
     history.replaceState(null,"",location.pathname); return true;};
   await takePair();
