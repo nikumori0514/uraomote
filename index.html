@@ -693,6 +693,7 @@ function renderFree(onlyUra){
     <p class="typedesc">${ds[2]}</p>
   </div>
   ${S.sentFree&&LINE_ON?`<div class="banner">この結果は公式LINE「うらおもて」にも送りました</div>`:""}
+  <div id="inbox"></div>
   <div class="card fade"><span class="sec">${yy}年のテーマ</span>
     <p class="big">${yu.theme}</p><p class="small">${yu.txt}</p>
     <p class="tease">このテーマに、あなたの性格はどう効く？</p></div>
@@ -711,7 +712,7 @@ function renderFree(onlyUra){
     if(S.mode!==b.dataset.m){S.ans={};S.qi=0}
     S.mode=b.dataset.m; S.step="q"; save(); render();
   });
-  bindPairBtn();
+  bindPairBtn(); loadInbox();
   document.getElementById("edit").onclick=()=>{S.step="start";S.sentFree=false;S.key="";save();render()};
   const st=document.getElementById("sticky"), box=document.getElementById("uraBox");
   if(st&&box&&window.IntersectionObserver){
@@ -812,6 +813,7 @@ function renderResult(){
     <p class="small">詳細レポート（${S.mode==="A"?"標準版":"総合版"}）／${todayStr()}</p>
   </div>
   ${LINE_ON?`<p class="small" id="autoMsg" style="text-align:center">${S.sent?"このレポートは公式LINE「うらおもて」にも送りました。":""}</p>`:""}
+  <div id="inbox"></div>
   ${checkH}
 
   <div class="part"><div class="seal o">表</div><div><div class="pt">おもて　占い</div>
@@ -847,7 +849,7 @@ function renderResult(){
   const c=document.getElementById("consult"); c.oninput=()=>{S.consult=c.value;save()};
   if(LINE_ON){ document.getElementById("snd").onclick=()=>{S.consult=c.value;save();sendToHQ(false)}; }
   else document.getElementById("cpd").onclick=e=>{S.consult=c.value;save();copy(makeData(),e.target,"送信用データをコピー")};
-  bindPairBtn();
+  bindPairBtn(); loadInbox();
   document.getElementById("again").onclick=()=>{S.ans={};S.qi=0;S.sent=false;S.consulted=false;S.step="choose";save();render()};
 }
 function fallback(txt,done){const t=document.createElement("textarea");t.value=txt;document.body.appendChild(t);t.select();try{document.execCommand("copy")}catch(e){}t.remove();done()}
@@ -940,6 +942,24 @@ function whenShort(a,apply){ // 短いリンクができるまで（最大4秒�
   const t=setTimeout(on,4000);
   shortInvite().then(id=>{clearTimeout(t); if(id) apply(id); on();});
 }
+function rememberInv(id){ if(!id) return; S.myInvs=(S.myInvs||[]).filter(x=>x!==id); S.myInvs.unshift(id); S.myInvs=S.myInvs.slice(0,10); save(); }
+// 自分が送った招待に届いた相性（相手が占い終えたもの）を本部から取ってきて、画面の上に出す
+async function loadInbox(){
+  const box=document.getElementById("inbox"); if(!box||!GAS_URL||!(S.myInvs||[]).length) return;
+  try{
+    const j=await fetch(GAS_URL+"?r="+encodeURIComponent(S.myInvs.join(","))).then(x=>x.json());
+    if(!j.ok||!j.list.length) return;
+    box.innerHTML=`<div class="card" style="border:2px solid var(--shu)"><span class="sec">相性の結果が届いています</span>
+      ${j.list.map((x,i)=>`<div class="tr" style="grid-template-columns:1fr auto;align-items:center"><div><b>${esc(x.nick)}さん</b>　${esc(x.score)}%<div class="small">${esc(x.rel)}／${esc(x.ptype)}</div></div><button class="btn" data-i="${i}" style="padding:8px 14px">見る</button></div>`).join("")}</div>`;
+    box.querySelectorAll("button[data-i]").forEach(b=>b.onclick=async()=>{
+      const x=j.list[+b.dataset.i]; b.textContent="…";
+      try{const d=await fetch(GAS_URL+"?p="+encodeURIComponent(x.back)).then(r=>r.json());
+        if(d.ok){ readPair(d.data); S.pairFrom=d.data; S.pairRel=x.relKey||"love"; S.pairInv=x.inv; S.step="pair"; S.fresh=false; save(); render(); }
+        else b.textContent="見られませんでした";
+      }catch(e){b.textContent="見られませんでした"}
+    });
+  }catch(e){}
+}
 function newInv(){return Math.random().toString(36).slice(2,10)}
 function pairInviteText(rel){return `${REL[rel]}の相性を「うらおもて」で見てみない？名前と生年月日だけで出るよ。`}
 function renderPairInvite(){
@@ -958,7 +978,7 @@ function renderPairInvite(){
   if(!S.inv){S.inv=newInv();save();}
   let sid=null; const ia=document.getElementById("inv");
   const setLink=()=>{const r=S.pairRel||"love";ia.href=`https://line.me/R/share?text=${encodeURIComponent(pairInviteText(r)+"\n"+inviteUrl(sid,r,sid?"":S.inv))}`};
-  ia.addEventListener("click",()=>{recordPair("招待",{inv:sid||S.inv,rel:REL[S.pairRel||"love"]}); if(!sid){S.inv=newInv();save();setTimeout(setLink,0)}});
+  ia.addEventListener("click",()=>{rememberInv(sid||S.inv);recordPair("招待",{inv:sid||S.inv,rel:REL[S.pairRel||"love"]}); if(!sid){S.inv=newInv();save();setTimeout(setLink,0)}});
   whenShort(ia,id=>{sid=id;setLink()});
   app.querySelectorAll(".rel").forEach(b=>b.onclick=()=>{S.pairRel=b.dataset.r;save();app.querySelectorAll(".rel").forEach(x=>x.classList.toggle("on",x===b));setLink()});
   setLink();
