@@ -974,7 +974,7 @@ async function loadInbox(){
     box.querySelectorAll("button[data-i]").forEach(b=>b.onclick=async()=>{
       const x=j.list[+b.dataset.i]; b.textContent="…";
       try{const d=await fetch(GAS_URL+"?p="+encodeURIComponent(x.back)).then(r=>r.json());
-        if(d.ok){ readPair(d.data); S.pairFrom=d.data; S.pairRel=x.relKey||"love"; S.pairInv=x.inv; S.pairOwner=true; S.step="pair"; S.fresh=false; save(); render(); }
+        if(d.ok){ readPair(d.data); S.pairFrom=d.data; S.pairSecret=false; S.pairRel=x.relKey||"love"; S.pairInv=x.inv; S.pairOwner=true; S.step="pair"; S.fresh=false; save(); render(); }
         else b.textContent="見られませんでした";
       }catch(e){b.textContent="見られませんでした"}
     });
@@ -987,12 +987,22 @@ function renderPairInvite(){
   el(`
   <div class="cover"><div class="kicker">ふ た り の う ら お も て</div>
     <div class="typename" style="margin-top:8px">相性を見る</div>
-    <p class="typedesc">相手に招待を送ると、相手が占ったところで<br>ふたりの相性が出ます。</p></div>
+    <p class="typedesc">こっそり占うか、相手に招待を送るか。</p></div>
   <div class="card"><p><b>どんな関係？</b></p>
     <div class="qopts" style="margin-top:8px">${Object.keys(REL).map(k=>`<button class="qopt rel ${k===rel?"on":""}" data-r="${k}">${REL[k]}</button>`).join("")}</div>
-    <p class="small" style="margin-top:12px">招待リンクには、あなたのニックネーム・名前・生年月日${S.mode?"・うらの回答":""}が入ります。相談の内容は入りません。</p>
+  </div>
+  <div class="card" style="border:2px solid var(--shu)"><span class="sec">こっそり占う</span>
+    <p class="small">相手の生年月日を入れるだけ。相手には何も届きません。</p>
+    <div style="display:grid;gap:10px;margin-top:10px">
+      <div><p><b>相手の呼び名</b></p><input id="secNick" maxlength="12" placeholder="例：たろう" value="${esc(S.secNick||"")}"></div>
+      <div><p><b>相手の生年月日</b></p><input type="date" id="secBd" value="${esc(S.secBd||"")}"></div></div>
+    <button class="cta" id="secGo" style="margin-top:14px">こっそり占う</button>
+    <p class="small" style="text-align:center;margin-top:8px">こっそり占うのは有料になる予定です（テスト中は無料）</p>
+  </div>
+  <div class="card"><span class="sec">相手にも占ってもらう（無料）</span>
+    <p class="small">招待を送ると、相手が占ったところで相性が出ます。ふたりとも「うら」を終えると、性格の相性まで出ます。</p>
+    <p class="small" style="margin-top:8px">招待リンクには、あなたのニックネーム・名前・生年月日${S.mode?"・うらの回答":""}が入ります。相談の内容は入りません。</p>
     <a class="share" data-share id="inv" target="_blank" rel="noopener">LINEで招待を送る</a>
-    <p class="small" style="text-align:center;margin-top:8px">相性の詳細は 1,980円（テスト中は無料）</p>
   </div>
   <p style="text-align:center"><button class="btn ghost" id="back">もどる</button></p>`);
   if(!S.inv){S.inv=newInv();save();}
@@ -1003,11 +1013,20 @@ function renderPairInvite(){
   app.querySelectorAll(".rel").forEach(b=>b.onclick=()=>{S.pairRel=b.dataset.r;save();app.querySelectorAll(".rel").forEach(x=>x.classList.toggle("on",x===b));setLink()});
   setLink();
   document.getElementById("back").onclick=()=>{S.step=S.pairBack||"free";save();render()};
+  document.getElementById("secGo").onclick=()=>{
+    const nick=document.getElementById("secNick").value.trim(), bd=document.getElementById("secBd").value;
+    if(!nick||!bd){alert("相手の呼び名と生年月日を入れてください");return}
+    S.secNick=nick; S.secBd=bd;
+    const o={v:2,n:nick,s:nick.slice(0,1),m:nick.slice(1)||nick,bd,bt:"",g:"",ov:{},md:"",a:"",q:"",d:new Date().toISOString().slice(0,10)};
+    S.pairFrom=btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+    S.pairSecret=true; S.pairOwner=false; S.pairInv=""; S.fresh=true; S.step="pair"; save(); render();
+  };
 }
 function renderPair(){
   let you; try{you=readPair(S.pairFrom)}catch(e){S.pairFrom="";S.step="free";save();return render()}
   const a=personOf(meNow()), b=personOf(you), c=pairCalc(a,b), rel=S.pairRel||"love";
-  const pop=S.fresh?"pop":""; if(S.fresh){S.fresh=false;save();shortInvite().then(id=>recordPair("相性結果",{inv:S.pairInv||"",back:id||"",relKey:rel,partner:b.name,rel:REL[rel],ptype:c.type,score:c.score,psy:c.b5?c.b5.psy:""}));}
+  const pop=S.fresh?"pop":""; if(S.fresh&&S.pairSecret){S.fresh=false;save();recordPair("こっそり",{partner:b.name,rel:REL[rel],relKey:rel,ptype:"",score:""});}
+  if(S.fresh){S.fresh=false;save();shortInvite().then(id=>recordPair("相性結果",{inv:S.pairInv||"",back:id||"",relKey:rel,partner:b.name,rel:REL[rel],ptype:c.type,score:c.score,psy:c.b5?c.b5.psy:""}));}
   const mini=(p,cls)=>`<div style="text-align:center"><div class="chara ${cls}" style="width:120px;height:120px;margin:8px auto"><svg viewBox="0 0 150 150" style="width:96px;height:96px">${CHARA[p.ms.dayStem]}</svg></div><b>${esc(p.name)}</b><div class="small">${p.ds[1]}タイプ</div></div>`;
   const b5H=c.b5?`
   <h3><span class="n" style="background:var(--ai);color:var(--moon)">裏</span>ふたりの性格（種明かし）</h3>
@@ -1019,7 +1038,7 @@ function renderPair(){
     <p><b style="color:var(--moon)">ぶつかりやすいところ：</b>「${B5META[c.b5.far.f].name}」。${GAP_TIP[c.b5.far.f]}</p>
   </div>`:`
   <div class="card aicard"><p><b style="color:var(--moon)">性格の相性は、まだ見られません</b></p>
-    <p class="small">${!a.b5?"あなた":""}${!a.b5&&!b.b5?"と":""}${!b.b5?esc(b.name)+"さん":""}が「うら」（50問）を終えると、性格の似ているところ・ぶつかりやすいところが出ます。</p>
+    ${S.pairSecret?`<p class="small">${esc(b.name)}さんに招待を送って「うら」まで答えてもらうと、性格の似ているところ・ぶつかりやすいところが出ます。</p>`:`<p class="small">${!a.b5?"あなた":""}${!a.b5&&!b.b5?"と":""}${!b.b5?esc(b.name)+"さん":""}が「うら」（50問）を終えると、性格の似ているところ・ぶつかりやすいところが出ます。</p>`}
     ${!a.b5?`<p style="margin-top:10px"><button class="btn" id="doUra" style="background:var(--btn);color:var(--ai)">うらを試す（約7分）</button></p>`:""}</div>`;
   el(`
   <div class="cover"><div class="kicker">${REL[rel]}の相性</div>
@@ -1030,7 +1049,7 @@ function renderPair(){
       <div class="card aicard" style="margin:0;padding:12px"><div class="kicker" style="color:var(--ai-sub)">性格の相性</div><div class="hit" style="font-size:2.4rem">${c.b5.psy}<small>%</small></div></div></div>
       <p class="mincho" style="margin-top:12px;font-size:1.02rem">${c.verdict}</p>`
     :`<div class="hit" style="color:var(--shu);font-size:3rem">${c.score}<small style="color:var(--sub)">%</small></div>
-      <p class="small">占いの相性です。ふたりとも「うら」を終えると、性格の相性と答え合わせできます。</p>`}
+      <p class="small">占いの相性です。${S.pairSecret?"":"ふたりとも「うら」を終えると、性格の相性と答え合わせできます。"}</p>`}
   </div>
   <h3><span class="n">表</span>ふたりの縁（四柱推命）</h3>
   <div class="card"><p>${c.txt}</p></div>
@@ -1043,16 +1062,21 @@ function renderPair(){
   <h3><span class="n">表</span>人から見たふたり（九星気学）</h3>
   <div class="card"><p>${KYUSEI[a.ki.hon]}と${KYUSEI[b.ki.hon]}。${c.kyu?"<b>相性のよい組み合わせ</b>。周りからも自然なペアに見えます。":"<b>ちがう持ち味</b>の組み合わせ。役割を分けると、周りから頼られるペアになります。"}</p></div>
   ${b5H}
-  ${S.pairOwner?`<div class="banner" style="background:var(--gold-soft);color:var(--ink)">${esc(b.name)}さんの画面にも、同じ結果が出ています</div>${pairBtn("pair")}`:`<a class="share" data-share id="sendBack" target="_blank" rel="noopener" href="https://line.me/R/share?text=${encodeURIComponent(`ふたりの相性、${c.score}%「${c.type}」だったよ。あなたの画面でも見てみて。\n${SHARE_URL}?pair=${pairData()}&r=${rel}&i=${S.pairInv||""}`)}" data-msg="${encodeURIComponent(`ふたりの相性、${c.score}%「${c.type}」だったよ。あなたの画面でも見てみて。`)}">${esc(b.name)}さんにも結果を送る</a>`}
+  ${S.pairSecret?`<div class="banner" style="background:var(--gold-soft);color:var(--ink)">こっそり占いました。${esc(b.name)}さんには届いていません</div>
+  <a class="share" data-share target="_blank" rel="noopener" href="https://line.me/R/share?text=${encodeURIComponent(`${esc(b.name)}との${REL[rel]}の相性、${c.score}%「${c.type}」だった！あなたも占ってみて
+${SHARE_URL}`)}" data-msg="${encodeURIComponent(`${b.name}との${REL[rel]}の相性、${c.score}%「${c.type}」だった！あなたも占ってみて`)}">友だちに見せる</a>
+  <p style="text-align:center;margin-top:10px"><button class="btn ghost" id="secInv">${esc(b.name)}さんにも招待を送る（無料）</button></p>`
+  :S.pairOwner?`<div class="banner" style="background:var(--gold-soft);color:var(--ink)">${esc(b.name)}さんの画面にも、同じ結果が出ています</div>${pairBtn("pair")}`:`<a class="share" data-share id="sendBack" target="_blank" rel="noopener" href="https://line.me/R/share?text=${encodeURIComponent(`ふたりの相性、${c.score}%「${c.type}」だったよ。あなたの画面でも見てみて。\n${SHARE_URL}?pair=${pairData()}&r=${rel}&i=${S.pairInv||""}`)}" data-msg="${encodeURIComponent(`ふたりの相性、${c.score}%「${c.type}」だったよ。あなたの画面でも見てみて。`)}">${esc(b.name)}さんにも結果を送る</a>`}
   <p style="text-align:center;margin-top:18px"><button class="btn ghost" id="mine">自分の結果を見る</button></p>
   <p class="note" style="margin-top:16px">相性は、ふたりの関係をふり返るための材料です。良い・悪いを決めるものではありません。</p>`);
-  if(!S.pairOwner){{ const sb=document.getElementById("sendBack"); whenShort(sb,id=>{sb.href=`https://line.me/R/share?text=${encodeURIComponent(decodeURIComponent(sb.dataset.msg)+"\n"+inviteUrl(id,rel,S.pairInv||""))}`}); }
+  if(S.pairSecret){ document.getElementById("secInv").onclick=()=>{S.pairBack="pair";S.step="pairInvite";save();render()}; }
+  else if(!S.pairOwner){{ const sb=document.getElementById("sendBack"); whenShort(sb,id=>{sb.href=`https://line.me/R/share?text=${encodeURIComponent(decodeURIComponent(sb.dataset.msg)+"\n"+inviteUrl(id,rel,S.pairInv||""))}`}); }
   document.getElementById("sendBack").addEventListener("click",()=>recordPair("送り返し",{inv:S.pairInv||"",partner:b.name,rel:REL[rel],ptype:c.type,score:c.score})); }
   bindPairBtn();
   document.getElementById("mine").onclick=()=>{S.step=S.mode&&Object.keys(S.ans||{}).length?"result":"free";save();render()};
   const u=document.getElementById("doUra"); if(u) u.onclick=()=>{S.mode="A";S.ans={};S.qi=0;S.pairReturn=true;S.step="q";save();render()};
 }
-function pairBtn(back){return `<div class="card" style="text-align:center;border:2px solid var(--shu)"><p class="big" style="font-size:1.1rem">あの人との相性は？</p><p class="small">恋人・友だち・仕事・家族。招待を送るだけ</p><button class="cta" id="toPair" data-b="${back}" style="margin-top:10px">相性を見る</button></div>`}
+function pairBtn(back){return `<div class="card" style="text-align:center;border:2px solid var(--shu)"><p class="big" style="font-size:1.1rem">あの人との相性は？</p><p class="small">恋人・友だち・仕事・家族。こっそりでも見られます</p><button class="cta" id="toPair" data-b="${back}" style="margin-top:10px">相性を見る</button></div>`}
 function bindPairBtn(){const b=document.getElementById("toPair"); if(b) b.onclick=()=>{S.pairBack=b.dataset.b;S.step="pairInvite";save();render()};}
 function afterFree(){return S.pairFrom?"pair":"free"}
 
@@ -1183,7 +1207,7 @@ async function route(){
         const j=await fetch(GAS_URL+"?p="+encodeURIComponent(pid),ac?{signal:ac.signal}:{}).then(x=>x.json()); clearTimeout(t); if(j.ok){pr=j.data;S.lastPid=pid;}}catch(e){}
       clearTimeout(st); }
     if(pr&&S.profile) try{ const y=readPair(pr).profile, me=S.profile; if(y.bd===me.bd&&y.sei===me.sei&&y.mei===me.mei){ S.selfInvite=true; S.step="free"; save(); history.replaceState(null,"",location.pathname); return true; } }catch(e){} // 自分の招待リンクを自分で開いた
-    if(pr) try{ readPair(pr); S.pairFrom=pr; S.pairRel=pq.get("r")||"love"; S.pairInv=pq.get("i")||pid||""; S.pairOwner=!!(pid&&pq.get("i")); /* p と i の両方＝自分が招待した相性（カード・送り返し）なので送り返しボタンは出さない */ if(S.profile){S.step="pair";S.fresh=true;} else S.step="start"; save(); }catch(e){}
+    if(pr) try{ readPair(pr); S.pairFrom=pr; S.pairSecret=false; S.pairRel=pq.get("r")||"love"; S.pairInv=pq.get("i")||pid||""; S.pairOwner=!!(pid&&pq.get("i")); /* p と i の両方＝自分が招待した相性（カード・送り返し）なので送り返しボタンは出さない */ if(S.profile){S.step="pair";S.fresh=true;} else S.step="start"; save(); }catch(e){}
     history.replaceState(null,"",location.pathname); return true;};
   await takePair();
   render();
