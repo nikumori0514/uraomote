@@ -1208,6 +1208,8 @@ async function route(){
     if(pr&&S.profile) try{ const y=readPair(pr).profile, me=S.profile; if(y.bd===me.bd&&y.sei===me.sei&&y.mei===me.mei){ S.selfInvite=true; S.step="free"; save(); history.replaceState(null,"",location.pathname); return true; } }catch(e){} // 自分の招待リンクを自分で開いた
     if(pr) try{ readPair(pr); S.pairFrom=pr; S.pairSecret=false; S.pairRel=pq.get("r")||"love"; S.pairInv=pq.get("i")||pid||""; S.pairOwner=!!(pid&&pq.get("i")); /* p と i の両方＝自分が招待した相性（カード・送り返し）なので送り返しボタンは出さない */ if(S.profile){S.step="pair";S.fresh=true;} else S.step="start"; save(); }catch(e){}
     history.replaceState(null,"",location.pathname); return true;};
+  // リンクなしで開いた（公式LINEのメニュー・人から回ってきた入口URL）ときは、前回の相性画面ではなく自分の結果から始める
+  if((S.step==="pair"||S.step==="pairInvite")&&!/[?&](p|pair|k)=/.test(decodeURIComponent(location.search))){ S.step=S.mode&&Object.keys(S.ans||{}).length?"result":(S.profile?"free":"start"); S.pairFrom=""; S.pairSecret=false; save(); }
   await takePair();
   render();
   if(!LINE_ON) return;
