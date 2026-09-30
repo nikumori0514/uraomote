@@ -702,6 +702,7 @@ function renderFree(onlyUra){
     <p class="typedesc">${ds[2]}</p>
   </div>
   ${S.sentFree&&LINE_ON?`<div class="banner">この結果は公式LINE「うらおもて」にも送りました</div>`:""}
+  ${S.selfInvite?(()=>{S.selfInvite=false;save();return `<div class="banner" style="background:var(--gold-soft);color:var(--ink)">いま開いたのは、あなたが送った招待リンクです。<br>相手が開いて占うと、ここに相性の結果が届きます。</div>`})():""}
   <div id="inbox"></div>
   <div class="card fade"><span class="sec">${yy}年のテーマ</span>
     <p class="big">${yu.theme}</p><p class="small">${yu.txt}</p>
@@ -955,10 +956,10 @@ async function shortInvite(){ // 本部にデータを預けて短い招待IDを
   return null;
 }
 function inviteUrl(id,r,inv){return id?`${SHARE_URL}?p=${id}&r=${r}${inv?"&i="+inv:""}`:`${SHARE_URL}?pair=${pairData()}&r=${r}&i=${inv||""}`}
-function whenShort(a,apply){ // 短いリンクができるまで（最大4秒）ボタンを待たせる
-  a.style.opacity=".5"; a.style.pointerEvents="none";
-  const on=()=>{a.style.opacity="";a.style.pointerEvents=""};
-  const t=setTimeout(on,4000);
+function whenShort(a,apply){ // 短いリンクができるまで（最大12秒）ボタンを待たせる。本部の初回起動は4秒を超えることがある
+  const label=a.textContent; a.style.opacity=".5"; a.style.pointerEvents="none"; a.textContent="リンクを準備しています…";
+  const on=()=>{a.style.opacity="";a.style.pointerEvents="";a.textContent=label};
+  const t=setTimeout(on,12000);
   shortInvite().then(id=>{clearTimeout(t); if(id) apply(id); on();});
 }
 function rememberInv(id){ if(!id) return; S.myInvs=(S.myInvs||[]).filter(x=>x!==id); S.myInvs.unshift(id); S.myInvs=S.myInvs.slice(0,10); save(); }
@@ -1181,6 +1182,7 @@ async function route(){
       try{const ac=window.AbortController?new AbortController():null, t=setTimeout(()=>ac&&ac.abort(),8000);
         const j=await fetch(GAS_URL+"?p="+encodeURIComponent(pid),ac?{signal:ac.signal}:{}).then(x=>x.json()); clearTimeout(t); if(j.ok){pr=j.data;S.lastPid=pid;}}catch(e){}
       clearTimeout(st); }
+    if(pr&&S.profile) try{ const y=readPair(pr).profile, me=S.profile; if(y.bd===me.bd&&y.sei===me.sei&&y.mei===me.mei){ S.selfInvite=true; S.step="free"; save(); history.replaceState(null,"",location.pathname); return true; } }catch(e){} // 自分の招待リンクを自分で開いた
     if(pr) try{ readPair(pr); S.pairFrom=pr; S.pairRel=pq.get("r")||"love"; S.pairInv=pq.get("i")||pid||""; S.pairOwner=!!(pid&&pq.get("i")); /* p と i の両方＝自分が招待した相性（カード・送り返し）なので送り返しボタンは出さない */ if(S.profile){S.step="pair";S.fresh=true;} else S.step="start"; save(); }catch(e){}
     history.replaceState(null,"",location.pathname); return true;};
   await takePair();
