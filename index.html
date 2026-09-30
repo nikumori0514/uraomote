@@ -905,6 +905,14 @@ function pairCalc(a,b){
   }
   return {type,txt,kyu,aGets,bGets,b5,score:Math.min(98,Math.round(score))};
 }
+function recordPair(event,o){ // 本部に記録（ログイン済みのときだけ・失敗しても画面は止めない）
+  if(!LINE_ON) return;
+  liffReady.then(()=>{ if(!liff.isLoggedIn()) return;
+    fetch(GAS_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body:JSON.stringify(Object.assign({type:"pair",event,idToken:liff.getIDToken(),nick:S.name},o))}).catch(()=>{});
+  }).catch(()=>{});
+}
+function newInv(){return Math.random().toString(36).slice(2,10)}
 function pairInviteText(rel){return `${REL[rel]}の相性を「うらおもて」で見てみない？名前と生年月日だけで出るよ。`}
 function renderPairInvite(){
   const rel=S.pairRel||"love";
@@ -919,7 +927,9 @@ function renderPairInvite(){
     <p class="small" style="text-align:center;margin-top:8px">相性の詳細は 1,980円（テスト中は無料）</p>
   </div>
   <p style="text-align:center"><button class="btn ghost" id="back">もどる</button></p>`);
-  const setLink=()=>{const r=S.pairRel||"love";document.getElementById("inv").href=`https://line.me/R/share?text=${encodeURIComponent(pairInviteText(r)+"\n"+SHARE_URL+"?pair="+pairData()+"&r="+r)}`};
+  if(!S.inv){S.inv=newInv();save();}
+  const setLink=()=>{const r=S.pairRel||"love";document.getElementById("inv").href=`https://line.me/R/share?text=${encodeURIComponent(pairInviteText(r)+"\n"+SHARE_URL+"?pair="+pairData()+"&r="+r+"&i="+S.inv)}`};
+  document.getElementById("inv").addEventListener("click",()=>{recordPair("招待",{inv:S.inv,rel:REL[S.pairRel||"love"]});S.inv=newInv();save();setTimeout(setLink,0)});
   app.querySelectorAll(".rel").forEach(b=>b.onclick=()=>{S.pairRel=b.dataset.r;save();app.querySelectorAll(".rel").forEach(x=>x.classList.toggle("on",x===b));setLink()});
   setLink();
   document.getElementById("back").onclick=()=>{S.step=S.pairBack||"free";save();render()};
@@ -927,7 +937,7 @@ function renderPairInvite(){
 function renderPair(){
   let you; try{you=readPair(S.pairFrom)}catch(e){S.pairFrom="";S.step="free";save();return render()}
   const a=personOf(meNow()), b=personOf(you), c=pairCalc(a,b), rel=S.pairRel||"love";
-  const pop=S.fresh?"pop":""; if(S.fresh){S.fresh=false;save();}
+  const pop=S.fresh?"pop":""; if(S.fresh){S.fresh=false;save();recordPair("相性結果",{inv:S.pairInv||"",partner:b.name,rel:REL[rel],ptype:c.type,score:c.score});}
   const mini=(p,cls)=>`<div style="text-align:center"><div class="chara ${cls}" style="width:120px;height:120px;margin:8px auto"><svg viewBox="0 0 150 150" style="width:96px;height:96px">${CHARA[p.ms.dayStem]}</svg></div><b>${esc(p.name)}</b><div class="small">${p.ds[1]}タイプ</div></div>`;
   const b5H=c.b5?`
   <h3><span class="n" style="background:var(--ai);color:var(--moon)">裏</span>ふたりの性格（種明かし）</h3>
@@ -958,9 +968,10 @@ function renderPair(){
   <h3><span class="n">表</span>人から見たふたり（九星気学）</h3>
   <div class="card"><p>${KYUSEI[a.ki.hon]}と${KYUSEI[b.ki.hon]}。${c.kyu?"<b>相性のよい組み合わせ</b>。周りからも自然なペアに見えます。":"<b>ちがう持ち味</b>の組み合わせ。役割を分けると、周りから頼られるペアになります。"}</p></div>
   ${b5H}
-  <a class="share" target="_blank" rel="noopener" href="https://line.me/R/share?text=${encodeURIComponent(`ふたりの相性、${c.score}%「${c.type}」だったよ。あなたの画面でも見てみて。\n${SHARE_URL}?pair=${pairData()}&r=${rel}`)}">${esc(b.name)}さんにも結果を送る</a>
+  <a class="share" id="sendBack" target="_blank" rel="noopener" href="https://line.me/R/share?text=${encodeURIComponent(`ふたりの相性、${c.score}%「${c.type}」だったよ。あなたの画面でも見てみて。\n${SHARE_URL}?pair=${pairData()}&r=${rel}&i=${S.pairInv||""}`)}">${esc(b.name)}さんにも結果を送る</a>
   <p style="text-align:center;margin-top:18px"><button class="btn ghost" id="mine">自分の結果を見る</button></p>
   <p class="note" style="margin-top:16px">相性は、ふたりの関係をふり返るための材料です。良い・悪いを決めるものではありません。</p>`);
+  document.getElementById("sendBack").addEventListener("click",()=>recordPair("送り返し",{inv:S.pairInv||"",partner:b.name,rel:REL[rel],ptype:c.type,score:c.score}));
   document.getElementById("mine").onclick=()=>{S.step=S.mode&&Object.keys(S.ans||{}).length?"result":"free";save();render()};
   const u=document.getElementById("doUra"); if(u) u.onclick=()=>{S.mode="A";S.ans={};S.qi=0;S.pairReturn=true;S.step="q";save();render()};
 }
@@ -1088,7 +1099,7 @@ window.addEventListener("focus",checkFriendAndSend);
 async function route(){
   // 相性の招待リンク（?pair=相手のデータ&r=関係）。LIFF経由でもinit後に同じ形で届く
   const takePair=()=>{const pq=new URLSearchParams(location.search), pr=pq.get("pair"); if(!pr) return false;
-    try{ readPair(pr); S.pairFrom=pr; S.pairRel=pq.get("r")||"love"; if(S.profile){S.step="pair";S.fresh=true;} else S.step="start"; save(); }catch(e){}
+    try{ readPair(pr); S.pairFrom=pr; S.pairRel=pq.get("r")||"love"; S.pairInv=pq.get("i")||""; if(S.profile){S.step="pair";S.fresh=true;} else S.step="start"; save(); }catch(e){}
     history.replaceState(null,"",location.pathname); return true;};
   takePair();
   render();
