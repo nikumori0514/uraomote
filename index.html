@@ -922,9 +922,19 @@ function pairCalc(a,b){
   if(a.b5&&b.b5){
     const d=B5ORDER.map(f=>({f,diff:a.b5[f].score-b.b5[f].score}));
     const near=[...d].sort((x,y)=>Math.abs(x.diff)-Math.abs(y.diff))[0], far=[...d].sort((x,y)=>Math.abs(y.diff)-Math.abs(x.diff))[0];
-    b5={d,near,far}; score+=Math.abs(near.diff)<=10?2:0;
+    // 性格の相性：似ている度合い（5特性の差の平均）6割＋ふたりの関係の安定しやすさ（寄り添う・積み上げるの平均、感じとるの低さ）4割
+    const sim=100-d.reduce((t,x)=>t+Math.abs(x.diff),0)/5;
+    const qual=(a.b5.A.score+b.b5.A.score+a.b5.C.score+b.b5.C.score+(100-a.b5.N.score)+(100-b.b5.N.score))/6;
+    const raw=sim*.6+qual*.4, psy=Math.max(55,Math.min(98,Math.round(80+(raw-66)*1.43))); // 占いの％と同じ目盛り（中央80前後）にそろえる
+    b5={d,near,far,psy};
   }
-  return {type,txt,kyu,aGets,bGets,b5,score:Math.min(98,Math.round(score))};
+  score=Math.min(98,Math.round(score));
+  let verdict="";
+  if(b5){const g=score-b5.psy;
+    verdict=Math.abs(g)<=10?"占いも性格も、同じ答え。噛み合うべくして噛み合うふたりです。"
+      :g>0?"占いの縁は強い。性格は、歩み寄りで育てていく関係です。"
+      :"占いの予想より、性格のほうが合っている。一緒にいるほど良さが出る関係です。";}
+  return {type,txt,kyu,aGets,bGets,b5,score,verdict};
 }
 function recordPair(event,o){ // 本部に記録（ログイン済みのときだけ・失敗しても画面は止めない）
   if(!LINE_ON) return;
@@ -996,7 +1006,7 @@ function renderPairInvite(){
 function renderPair(){
   let you; try{you=readPair(S.pairFrom)}catch(e){S.pairFrom="";S.step="free";save();return render()}
   const a=personOf(meNow()), b=personOf(you), c=pairCalc(a,b), rel=S.pairRel||"love";
-  const pop=S.fresh?"pop":""; if(S.fresh){S.fresh=false;save();shortInvite().then(id=>recordPair("相性結果",{inv:S.pairInv||"",back:id||"",relKey:rel,partner:b.name,rel:REL[rel],ptype:c.type,score:c.score}));}
+  const pop=S.fresh?"pop":""; if(S.fresh){S.fresh=false;save();shortInvite().then(id=>recordPair("相性結果",{inv:S.pairInv||"",back:id||"",relKey:rel,partner:b.name,rel:REL[rel],ptype:c.type,score:c.score,psy:c.b5?c.b5.psy:""}));}
   const mini=(p,cls)=>`<div style="text-align:center"><div class="chara ${cls}" style="width:120px;height:120px;margin:8px auto"><svg viewBox="0 0 150 150" style="width:96px;height:96px">${CHARA[p.ms.dayStem]}</svg></div><b>${esc(p.name)}</b><div class="small">${p.ds[1]}タイプ</div></div>`;
   const b5H=c.b5?`
   <h3><span class="n" style="background:var(--ai);color:var(--moon)">裏</span>ふたりの性格（種明かし）</h3>
@@ -1014,7 +1024,12 @@ function renderPair(){
   <div class="cover"><div class="kicker">${REL[rel]}の相性</div>
     <div class="${pop}" style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center">${mini(a,"")}<div class="mincho" style="font-size:1.6rem;color:var(--shu)">×</div>${mini(b,"")}</div>
     <div class="typename" style="margin-top:10px"><small>ふたりは</small>${esc(c.type)}</div>
-    <div class="hit" style="color:var(--shu);font-size:3rem">${c.score}<small style="color:var(--sub)">%</small></div>
+    ${c.b5?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+      <div class="card" style="margin:0;padding:12px"><div class="kicker">占いの相性</div><div class="hit" style="color:var(--shu);font-size:2.4rem">${c.score}<small style="color:var(--sub)">%</small></div></div>
+      <div class="card aicard" style="margin:0;padding:12px"><div class="kicker" style="color:var(--ai-sub)">性格の相性</div><div class="hit" style="font-size:2.4rem">${c.b5.psy}<small>%</small></div></div></div>
+      <p class="mincho" style="margin-top:12px;font-size:1.02rem">${c.verdict}</p>`
+    :`<div class="hit" style="color:var(--shu);font-size:3rem">${c.score}<small style="color:var(--sub)">%</small></div>
+      <p class="small">占いの相性です。ふたりとも「うら」を終えると、性格の相性と答え合わせできます。</p>`}
   </div>
   <h3><span class="n">表</span>ふたりの縁（四柱推命）</h3>
   <div class="card"><p>${c.txt}</p></div>
