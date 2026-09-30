@@ -527,7 +527,17 @@ function checks(r,stem){return CHECK[stem].map(c=>{const x=r.b5[c.f],m=B5META[c.
 
 // ===== 共有（人の手をかけずに広がる入口） =====
 const SHARE_URL="https://liff.line.me/"+LIFF_ID;
-function shareBtn(text){return `<a class="share" href="https://line.me/R/share?text=${encodeURIComponent(text+"\n"+SHARE_URL)}" target="_blank" rel="noopener">LINEで友だちにも送る</a>`}
+function shareBtn(text){return `<a class="share" data-share href="https://line.me/R/share?text=${encodeURIComponent(text+"\n"+SHARE_URL)}" target="_blank" rel="noopener">LINEで友だちにも送る</a>`}
+
+// スマホ（LINEアプリあり）はLINEの送信画面へ。PCなどはLINEアプリに飛べないので、文面とリンクをコピーする
+const IS_MOBILE=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+document.addEventListener("click",e=>{
+  const a=e.target.closest&&e.target.closest("a[data-share]"); if(!a||IS_MOBILE) return;
+  e.preventDefault();
+  const txt=decodeURIComponent((a.href.split("text=")[1]||""));
+  const done=()=>{const t=a.textContent;a.textContent="コピーしました。LINEに貼って送ってください";setTimeout(()=>a.textContent=t,2500)};
+  if(navigator.clipboard) navigator.clipboard.writeText(txt).then(done,()=>fallback(txt,done)); else fallback(txt,done);
+});
 
 // ===== 表と裏が回る待ち画面 =====
 function reveal(msg,cb){
@@ -923,7 +933,7 @@ function renderPairInvite(){
   <div class="card"><p><b>どんな関係？</b></p>
     <div class="qopts" style="margin-top:8px">${Object.keys(REL).map(k=>`<button class="qopt rel ${k===rel?"on":""}" data-r="${k}">${REL[k]}</button>`).join("")}</div>
     <p class="small" style="margin-top:12px">招待リンクには、あなたのニックネーム・名前・生年月日${S.mode?"・うらの回答":""}が入ります。相談の内容は入りません。</p>
-    <a class="share" id="inv" target="_blank" rel="noopener">LINEで招待を送る</a>
+    <a class="share" data-share id="inv" target="_blank" rel="noopener">LINEで招待を送る</a>
     <p class="small" style="text-align:center;margin-top:8px">相性の詳細は 1,980円（テスト中は無料）</p>
   </div>
   <p style="text-align:center"><button class="btn ghost" id="back">もどる</button></p>`);
@@ -968,7 +978,7 @@ function renderPair(){
   <h3><span class="n">表</span>人から見たふたり（九星気学）</h3>
   <div class="card"><p>${KYUSEI[a.ki.hon]}と${KYUSEI[b.ki.hon]}。${c.kyu?"<b>相性のよい組み合わせ</b>。周りからも自然なペアに見えます。":"<b>ちがう持ち味</b>の組み合わせ。役割を分けると、周りから頼られるペアになります。"}</p></div>
   ${b5H}
-  <a class="share" id="sendBack" target="_blank" rel="noopener" href="https://line.me/R/share?text=${encodeURIComponent(`ふたりの相性、${c.score}%「${c.type}」だったよ。あなたの画面でも見てみて。\n${SHARE_URL}?pair=${pairData()}&r=${rel}&i=${S.pairInv||""}`)}">${esc(b.name)}さんにも結果を送る</a>
+  <a class="share" data-share id="sendBack" target="_blank" rel="noopener" href="https://line.me/R/share?text=${encodeURIComponent(`ふたりの相性、${c.score}%「${c.type}」だったよ。あなたの画面でも見てみて。\n${SHARE_URL}?pair=${pairData()}&r=${rel}&i=${S.pairInv||""}`)}">${esc(b.name)}さんにも結果を送る</a>
   <p style="text-align:center;margin-top:18px"><button class="btn ghost" id="mine">自分の結果を見る</button></p>
   <p class="note" style="margin-top:16px">相性は、ふたりの関係をふり返るための材料です。良い・悪いを決めるものではありません。</p>`);
   document.getElementById("sendBack").addEventListener("click",()=>recordPair("送り返し",{inv:S.pairInv||"",partner:b.name,rel:REL[rel],ptype:c.type,score:c.score}));
