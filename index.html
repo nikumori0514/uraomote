@@ -666,7 +666,7 @@ function elBars(ms){
     <p class="desc">多い：${many.map(e=>e+"（"+EL_MEAN[e]+"）").join("、")}${none.length?`<br>ない：${none.map(e=>e+"（"+EL_MEAN[e]+"）").join("、")}＝人や環境で補うと楽になる力`:""}</p>`;
 }
 function kakuRowsOf(u,keys){return keys.map(k=>{const v=u.kaku[k],rt=kakuRate(v);return `<div style="padding:8px 0;border-bottom:1px solid var(--line)"><div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><b style="white-space:nowrap">${k}</b><span style="font-size:1.15rem;font-weight:700;white-space:nowrap">${v}画</span><span style="white-space:nowrap">${KAKU_SOFT[rt]||"—"}</span><span class="small" style="white-space:nowrap">（伝統的な判定：${rt}）</span></div><div class="small">${KAKU_ROLE[k]}</div></div>`}).join("")}
-function windTxt(w){return w.length?`<span class="tag">追い風：${w.join("・")}が入る</span>`:""}
+function windTxt(w){return w.length?`<div style="margin:2px 0 2px"><span class="tag" style="margin-left:0">追い風：${w.join("・")}が入る</span></div>`:""} // 見出しの下にそろえる
 function ageNow(){const [y,m,d]=S.profile.bd.split("-").map(Number),n=new Date();return n.getFullYear()-y-((n.getMonth()+1<m||(n.getMonth()+1===m&&n.getDate()<d))?1:0)}
 
 // ===== 無料：さくっと占い =====
