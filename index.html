@@ -909,16 +909,18 @@ const GAP_TIP={
 function pairCalc(a,b){
   const sa=a.ms.dayStem, sb=b.ms.dayStem, r=relOf(sa,sb), A=a.name, B=b.name;
   let type,txt,base;
-  if(Math.abs(sa-sb)===5){type="惹かれ合う縁";base=90;txt="陰と陽がぴたりと合う、特別な組み合わせ（干合）。一緒にいると、自分にない面が自然と引き出されます。";}
-  else if(r===0){type="似たもの同士";base=80;txt="同じ力を持つふたり。わかり合うのは早い一方で、同じところで意地を張りやすい関係です。";}
-  else if(r===1){type=`${A}さんが育てる`;base=85;txt=`${A}さんの力が、${B}さんを伸ばす流れ。${A}さんは与えすぎに、${B}さんは甘えすぎに注意。`;}
-  else if(r===4){type=`${B}さんが育てる`;base=85;txt=`${B}さんの力が、${A}さんを伸ばす流れ。${B}さんは与えすぎに、${A}さんは甘えすぎに注意。`;}
-  else if(r===2){type=`${A}さんが磨く`;base=74;txt=`${A}さんが引っぱり、${B}さんが鍛えられる関係。言い方ひとつで、成長にも窮屈にもなります。`;}
-  else {type=`${B}さんが磨く`;base=74;txt=`${B}さんが引っぱり、${A}さんが鍛えられる関係。言い方ひとつで、成長にも窮屈にもなります。`;}
+  if(Math.abs(sa-sb)===5){type="惹かれ合う縁";base=88;txt="陰と陽がぴたりと合う、特別な組み合わせ（干合）。一緒にいると、自分にない面が自然と引き出されます。";}
+  else if(r===0){type="似たもの同士";base=72;txt="同じ力を持つふたり。わかり合うのは早い一方で、同じところで意地を張りやすい関係です。";}
+  else if(r===1){type=`${A}さんが育てる`;base=78;txt=`${A}さんの力が、${B}さんを伸ばす流れ。${A}さんは与えすぎに、${B}さんは甘えすぎに注意。`;}
+  else if(r===4){type=`${B}さんが育てる`;base=78;txt=`${B}さんの力が、${A}さんを伸ばす流れ。${B}さんは与えすぎに、${A}さんは甘えすぎに注意。`;}
+  else if(r===2){type=`${A}さんが磨く`;base=58;txt=`${A}さんが引っぱり、${B}さんが鍛えられる関係。言い方ひとつで、成長にも窮屈にもなります。`;}
+  else {type=`${B}さんが磨く`;base=58;txt=`${B}さんが引っぱり、${A}さんが鍛えられる関係。言い方ひとつで、成長にも窮屈にもなります。`;}
   const kyu=kCompat(a.ki.hon,b.ki.hon);
   const fill=(x,y)=>lowEls(x.ms).filter(e=>y.ms.elements[e]>=2);
   const aGets=fill(a,b), bGets=fill(b,a);
-  let score=base+(kyu?5:0)+Math.min(3,(aGets.length+bGets.length)*1.5);
+  // 占いの％（30〜99）：縁の型＋九星（合う+8／合わない-6）＋五行の補い合い（なし-6／あり最大+6）＋日支（支合+4／冲-12）
+  const fillN=aGets.length+bGets.length, ba=BRANCHES.indexOf(a.ms.day[1]), bb=BRANCHES.indexOf(b.ms.day[1]);
+  let score=base+(kyu?8:-6)+(fillN?Math.min(6,fillN*2):-6)+((ba+bb)%12===1?4:0)+(Math.abs(ba-bb)===6?-12:0);
   let b5=null;
   if(a.b5&&b.b5){
     const d=B5ORDER.map(f=>({f,diff:a.b5[f].score-b.b5[f].score}));
@@ -929,7 +931,7 @@ function pairCalc(a,b){
     const raw=sim*.6+qual*.4, psy=Math.max(55,Math.min(98,Math.round(80+(raw-66)*1.43))); // 占いの％と同じ目盛り（中央80前後）にそろえる
     b5={d,near,far,psy};
   }
-  score=Math.min(98,Math.round(score));
+  score=Math.max(30,Math.min(99,Math.round(score)));
   let verdict="";
   if(b5){const g=score-b5.psy;
     verdict=Math.abs(g)<=10?"占いも性格も、同じ答え。噛み合うべくして噛み合うふたりです。"
@@ -1049,6 +1051,7 @@ function renderPair(){
       <p class="mincho" style="margin-top:12px;font-size:1.02rem">${c.verdict}</p>`
     :`<div class="hit" style="color:var(--shu);font-size:3rem">${c.score}<small style="color:var(--sub)">%</small></div>
       <p class="small">占いの相性です。${S.pairSecret?"":"ふたりとも「うら」を終えると、性格の相性と答え合わせできます。"}</p>`}
+    ${c.score>=95?`<p class="small" style="margin-top:6px">めったに出ない高さです。</p>`:c.score<50?`<p class="small" style="margin-top:6px">めったに出ない低さ。正反対のふたりは、わかり合えた分だけ強くなります。</p>`:c.score<60?`<p class="small" style="margin-top:6px">ちがいの多いふたり。ちがいを面白がれると、一気に伸びます。</p>`:""}
   </div>
   <h3><span class="n">表</span>ふたりの縁（四柱推命）</h3>
   <div class="card"><p>${c.txt}</p></div>
