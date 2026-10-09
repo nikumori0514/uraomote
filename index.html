@@ -288,6 +288,37 @@ function relOf(dayStem,stem){return (Math.floor(stem/2)-Math.floor(dayStem/2)+5)
 function tsuhen(dayStem,stem){return GEN_GROUP[relOf(dayStem,stem)][(dayStem%2)===(stem%2)?0:1]}
 function idx60(p){for(let i=0;i<60;i++)if(pillar(i)===p)return i;return -1}
 function lowEls(ms){const v=Object.values(ms.elements),mn=Math.min(...v);return Object.keys(ms.elements).filter(k=>ms.elements[k]===mn)}
+
+// ===== 算命学（十大主星・十二大従星・天中殺） =====
+// 蔵干（二十八元）：節入りから何日目かで使う干が変わる。[何日目まで, 干の番号]
+const ZOKAN=[[[99,9]],[[9,9],[12,7],[99,5]],[[7,4],[14,2],[99,0]],[[99,1]],[[9,1],[12,9],[99,4]],[[5,4],[14,6],[99,2]],
+  [[19,5],[99,3]],[[9,3],[12,1],[99,5]],[[10,4],[13,8],[99,6]],[[99,7]],[[9,7],[12,3],[99,4]],[[12,0],[99,8]]]; // 子〜亥
+const JUDAI=[["貫索星","石門星"],["鳳閣星","調舒星"],["禄存星","司禄星"],["車騎星","牽牛星"],["龍高星","玉堂星"]];
+const JUDAI_MEAN={貫索星:"自分のペースを守る。決めたことは曲げない",石門星:"仲間をつくる。対等な関係で人をまとめる",
+  鳳閣星:"自然体で楽しむ。見たままを伝える",調舒星:"感性が鋭い。ひとりの時間でこだわりを磨く",
+  禄存星:"人に尽くす。気前よく与えて、人が集まる",司禄星:"コツコツ積む。暮らしと蓄えを守る",
+  車騎星:"すぐ動く。考えるより先に体が出る",牽牛星:"役目をきちんと果たす。誇りと責任感がある",
+  龍高星:"体験して学ぶ。いまある型を変えていく",玉堂星:"じっくり学ぶ。教わったことを受け継ぐ"};
+const CHOSEI=[11,6,2,9,2,9,5,0,8,3]; // 甲〜癸の「長生」になる支
+const JUSEI=["天貴星","天恍星","天南星","天禄星","天将星","天堂星","天胡星","天極星","天庫星","天馳星","天報星","天印星"]; // 長生〜養
+const JUSEI_MEAN={天貴星:"誇り高く、学ぶことが好き",天恍星:"夢を追い、生まれた場所を離れて輝く",天南星:"勢いがあり、思ったことをはっきり言う",
+  天禄星:"現実を見て、堅実に積み上げる",天将星:"12の中でいちばん力が強い。責任を背負うほど輝く",天堂星:"落ち着いていて、一歩ひいて支える",
+  天胡星:"感覚が鋭く、音や空気を感じとる",天極星:"まっすぐで、損得より気持ちで動く",天庫星:"ひとつのことを掘り下げ、受け継いだものを守る",
+  天馳星:"瞬発力がある。忙しいほど力が出る",天報星:"多才で、関心がくるくる変わる",天印星:"愛嬌があり、まわりに可愛がられる"};
+const TENCHU_MEAN=["目上に頼らず、自分の力で道をつくる人。年下や後輩には恵まれやすい","外で大きく動く人。仕事はひとりで背負わず、家や身内を足場にすると強い",
+  "型にはまらない人。ふつうと違う発想がそのまま持ち味になる","自分の代で形にしていく人。年上や目上には恵まれやすい",
+  "じっとしているより、動いて役目を持つと安定する人","頭の中の世界が広い人。ひとりで考える時間が力になる"]; // 子丑・寅卯・辰巳・午未・申酉・戌亥
+function sanmei(ms){
+  const ds=ms.dayStem, br=p=>BRANCHES.indexOf(p[1]), st=p=>STEMS.indexOf(p[0]), DAY=24*HOUR;
+  const t=birthT(), n=Math.floor((t+9*HOUR)/DAY)-Math.floor((nextSetsu(t,-1)+9*HOUR)/DAY)+1; // 節入りの日を1日目として数える
+  const zokan=b=>ZOKAN[b].find(x=>n<=x[0])[1];
+  const shu=s=>JUDAI[relOf(ds,s)][(ds%2)===(s%2)?0:1];
+  const ju=b=>JUSEI[ds%2===0?(b-CHOSEI[ds]+12)%12:(CHOSEI[ds]-b+12)%12];
+  const tb=(10-2*Math.floor(idx60(ms.day)/10)+12)%12; // 天中殺になる2つの支の1つめ
+  return {n,center:shu(zokan(br(ms.month))),head:shu(st(ms.year)),left:shu(zokan(br(ms.year))),right:shu(zokan(br(ms.day))),belly:shu(st(ms.month)),
+    young:ju(br(ms.year)),mid:ju(br(ms.month)),late:ju(br(ms.day)),tenchu:BRANCHES[tb]+BRANCHES[tb+1],tIdx:tb/2,tb};
+}
+function tenchuYears(tb,from){for(let y=from;;y++){const b=((y-4)%12+12)%12;if(b===tb)return [y,y+1];if(b===tb+1)return [y]}} // 次に来る2年（2年目の途中なら今年だけ）
 // 通変星10種ごとのテーマ（同じ系統が並んでも文言が重ならないように）
 const STAR_THEME={比肩:"自分の軸を立てる",劫財:"勝負に出る",食神:"楽しんで広げる",傷官:"表現して変える",偏財:"人とお金が動く",正財:"着実に稼ぐ",偏官:"挑戦で鍛える",正官:"信用を積む",偏印:"ひらめきで転じる",印綬:"学んで蓄える"};
 const STAR_TXT={
@@ -766,9 +797,31 @@ function renderResult(){
     <div class="tr" style="border-top:1px solid var(--line)"><div class="td1">人から<br>見たあなた</div><div><b>${KYU_MEAN[ki.hon]}</b><div class="small">本命星：${KYUSEI[ki.hon]}</div></div></div>
     <div class="tr"><div class="td1">素の<br>あなた</div><div><b>${KYU_MEAN[ki.getsu]}</b><div class="small">月命星：${KYUSEI[ki.getsu]}</div></div></div>
     <details class="more"><summary>くわしく見る（九星気学とは）</summary>
-      <p class="small">九星気学では、生まれた年で「本命星」（社会での顔）、生まれた月で「月命星」（内面・素の自分）が決まります。4の吉方位は、本命星と相性のよい星が回っている方角です。</p>
+      <p class="small">九星気学では、生まれた年で「本命星」（社会での顔）、生まれた月で「月命星」（内面・素の自分）が決まります。5の吉方位は、本命星と相性のよい星が回っている方角です。</p>
     </details></div>`;
-  // --- おもて3：運気の流れ
+  // --- おもて3：算命学（意味が先・星の名前は小さく）
+  const sm=sanmei(ms), smRow=(k,v,M)=>`<div class="tr"><div class="td1">${k}</div><div><b>${M[v]}</b><div class="small">${v}</div></div></div>`;
+  const tcY=tenchuYears(sm.tb,solarT(Date.now()).yy), cell=(k,v)=>`<div style="border:1px solid var(--line);border-radius:10px;padding:6px;background:#fff"><div class="small">${k}</div><div class="mincho" style="font-size:.95rem">${v}</div></div>`;
+  const sanH=`${H(3,"場面ごとのあなた（算命学）")}<div class="card">
+    <p class="small">あなたの芯</p>
+    <p class="big" style="color:var(--shu)">${JUDAI_MEAN[sm.center]}</p>
+    <p class="small">${sm.center}</p>
+    <p style="margin-top:14px"><b>相手によって出る顔</b></p>
+    <div class="tbl">${smRow("目上・親<br>の前で",sm.head,JUDAI_MEAN)}${smRow("仕事・<br>友だち",sm.left,JUDAI_MEAN)}${smRow("パートナー<br>・身内",sm.right,JUDAI_MEAN)}${smRow("子ども・<br>後輩",sm.belly,JUDAI_MEAN)}</div>
+    <p style="margin-top:16px"><b>年代ごとの力</b></p>
+    <div class="tbl">${smRow("若いころ",sm.young,JUSEI_MEAN)}${smRow("働きざかり",sm.mid,JUSEI_MEAN)}${smRow("年を重ね<br>てから",sm.late,JUSEI_MEAN)}</div>
+    <p style="margin-top:16px"><b>生まれ持った型</b></p>
+    <p>${TENCHU_MEAN[sm.tIdx]}</p>
+    <p class="small">${sm.tenchu}天中殺。流れが切り替わりやすい年は${tcY.join("・")}年（12年のうち2年）。新しく広げるより、整えるのに向く時期です。</p>
+    <details class="more"><summary>くわしく見る（算命学とは）</summary>
+      <p class="small">算命学は、1と同じ暦（干支）を使い、生まれた年・月・日だけで読む占いです（生まれた時間は使いません）。まん中が「あなたの芯」、まわりの4つが相手によって出る顔、角の3つが年代ごとの力です。</p>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center;margin:8px 0">
+        <div></div>${cell("目上・親",sm.head)}${cell("若いころ",sm.young)}
+        ${cell("パートナー・身内",sm.right)}${cell("芯",sm.center)}${cell("仕事・友だち",sm.left)}
+        ${cell("年を重ねてから",sm.late)}${cell("子ども・後輩",sm.belly)}${cell("働きざかり",sm.mid)}</div>
+      <p class="small">生まれた日は、暦の月の変わり目から${sm.n}日目として計算しています。星の出し方は流派によって違います。</p>
+    </details></div>`;
+  // --- おもて4：運気の流れ
   const age=ageNow(), dy=daiun(ms,S.profile.g), nowY=solarT(Date.now()).yy;
   const dyH=dy?`<p><b>10年ごとの流れ</b><span class="small">　${dy.start}歳から10年ごとに切り替わります</span></p>
     <div class="tbl">${dy.list.filter(x=>x.from+10>age-10&&x.from<age+40).map(x=>{const cur=age>=x.from&&age<x.from+10;
@@ -782,26 +835,26 @@ function renderResult(){
       return `<div class="tr ${k===0?"cur":""}"><div class="td1">${m.label}</div><div><b>${x.theme}</b>${windTxt(x.wind)}</div></div>`}).join("")}</div>
     <p class="small">月の切り替わりは毎月5〜8日ごろです。「追い風」は、あなたに少ない力が入ってくる時期です。</p>
     <details class="more"><summary>くわしく見る（暦の文字）</summary><p class="small">10年ごと：${dy?dy.list.map(x=>`${x.from}歳 ${x.p}（${x.star}）`).join("／"):"—"}<br>年：${[0,1,2].map(k=>{const x=unseiOf(yearPillar(nowY+k),ms);return `${nowY+k} ${x.p}（${x.star}）`}).join("／")}</p></details>`;
-  const flowH=`${H(3,"運気の流れ")}<div class="card">${dyH}${yrH}${moH}</div>`;
-  // --- おもて4：吉方位
+  const flowH=`${H(4,"運気の流れ")}<div class="card">${dyH}${yrH}${moH}</div>`;
+  // --- おもて5：吉方位
   const hy=[0,1].map(k=>{const yy=nowY+k;return {yy,h:hoi(yearStar(yy),((yy-4)%12+12)%12,ki,"歳破")}});
   const dirTxt=h=>`${h.best.length?`<b>${h.best.join("・")}</b>`:""}${h.best.length&&h.good.length?"・":""}${h.good.join("・")}${!h.best.length&&!h.good.length?"<span class='small'>なし（大きな移動は控えめに）</span>":""}`;
   const badTxt=h=>Object.keys(h.bad).filter(d=>DIR8.includes(d)).sort((a,b)=>DIR8.indexOf(a)-DIR8.indexOf(b)).join("・");
-  const hoiH=`${H(4,"吉方位")}<div class="card">
+  const hoiH=`${H(5,"吉方位")}<div class="card">
     <p><b>引っ越し・長く住む場所は「年」で見ます</b></p>
     ${hy.map(x=>`<div class="tr"><div class="td1">${x.yy}年</div><div>吉：${dirTxt(x.h)}<div class="small">避けたい：${badTxt(x.h)}</div></div></div>`).join("")}
     <p style="margin-top:16px"><b>旅行・お出かけは「月」で見ます</b></p>
     <div class="tbl">${months.map(m=>{const h=hoi(monthCenter(yearStar(m.yy),m.mIdx),(2+m.mIdx)%12,ki,"月破");
       return `<div class="tr"><div class="td1">${m.label}</div><div>吉：${dirTxt(h)}<div class="small">避けたい：${badTxt(h)}</div></div></div>`}).join("")}</div>
     <p class="small">太字は「素のあなた」とも相性がよい、特に良い方角。方角は自宅から見た向きです（流派により見方が異なります）。</p></div>`;
-  // --- おもて5：風水
+  // --- おもて6：風水
   const low=lowEls(ms), mx=Math.max(...Object.values(ms.elements)), hi=Object.keys(ms.elements).filter(k=>ms.elements[k]===mx);
-  const fsH=`${H(5,"あなたに合う風水")}<div class="card">
+  const fsH=`${H(6,"あなたに合う風水")}<div class="card">
     <p>少ない<b>${low.map(e=>EL_MEAN[e]).join("・")}</b>の力を、部屋で補うとバランスが整いやすくなります。</p>
     ${low.slice(0,2).map(e=>{const f=FS[e];return `<div class="tr"><div class="td1" style="color:${ELC[e]}">${e}の力</div><div>方角：${f.dir}／色：${f.color}<div class="small">置くもの：${f.item}<br>習慣：${f.act}</div></div></div>`}).join("")}
     <p class="small" style="margin-top:8px">多い${hi.join("・")}の力は、それが生む${hi.map(e=>ELS[(ELS.indexOf(e)+1)%5]).join("・")}の色やものを少し足すと、ほどよく外に流れます。</p></div>`;
-  // --- おもて6：画数
-  const kakuH=`${H(6,"画数（姓名判断）")}<div class="card">
+  // --- おもて7：画数
+  const kakuH=`${H(7,"画数（姓名判断）")}<div class="card">
     <p class="small">${esc(S.profile.sei)}（${u.s.join("・")}）　${esc(S.profile.mei)}（${u.n.join("・")}）</p>
     <div>${kakuRowsOf(u,Object.keys(u.kaku))}</div>
     <p class="note" style="margin-top:10px">画数の吉凶は流派によって違います（ここでは熊崎式・新字体の画数）。「鍛えどころ」は悪い意味ではなく、意識すると伸びる場所です。</p></div>`;
@@ -828,7 +881,7 @@ function renderResult(){
 
   <div class="part"><div class="seal o">表</div><div><div class="pt">おもて　占い</div>
     <div class="pd">生まれた日と名前から見る、あなたの外側の流れ</div></div></div>
-  ${shichu}${kiH}${flowH}${hoiH}${fsH}${kakuH}
+  ${shichu}${kiH}${sanH}${flowH}${hoiH}${fsH}${kakuH}
 
   <div class="urapart">
   <div class="part"><div class="seal u">裏</div><div><div class="pt">うら　種明かし</div>
